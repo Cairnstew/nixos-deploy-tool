@@ -1,0 +1,16 @@
+name: Test (integration)
+
+on:
+  workflow_call:
+
+jobs:
+  test-integration:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration/ -v

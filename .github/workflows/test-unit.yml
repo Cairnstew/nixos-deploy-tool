@@ -1,0 +1,21 @@
+name: Test (unit)
+
+on:
+  workflow_call:
+
+jobs:
+  test-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit/ -v --cov --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false

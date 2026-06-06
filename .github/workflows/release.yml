@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      has_cli: ${{ steps.cli.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: cli
+        run: |
+          value=false
+          if grep -q '^\[project\.scripts\]' pyproject.toml 2>/dev/null; then
+            value=true
+          fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: detect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/flakehub-cache-action@v3
+
+      - name: Nix build
+        run: nix build .#default
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uv2nix-template
+          path: result
+
+  publish-pypi:
+    needs: [detect, build]
+    if: needs.detect.outputs.has_cli == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: uv2nix-template
+          path: dist
+
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/flakehub-cache-action@v3
+
+      - name: Build wheel
+        run: nix develop .#bootstrap --command uv build
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
+
+  github-release:
+    needs: [detect, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: uv2nix-template
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+          generate_release_notes: true

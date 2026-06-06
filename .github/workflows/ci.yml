@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      nix:    ${{ steps.filter.outputs.nix }}
+      docs:   ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            nix:
+              - '**.nix'
+              - 'flake.lock'
+            docs:
+              - 'docs/**'
+              - '*.md'
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    uses: ./.github/workflows/lint.yml
+    secrets: inherit
+
+  typecheck:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    uses: ./.github/workflows/typecheck.yml
+    secrets: inherit
+
+  test-unit:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    uses: ./.github/workflows/test-unit.yml
+    secrets: inherit
+
+  test-integration:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    uses: ./.github/workflows/test-integration.yml
+    secrets: inherit
+
+  nix:
+    needs: changes
+    if: needs.changes.outputs.nix == 'true'
+    uses: ./.github/workflows/nix.yml
+    secrets: inherit
+
+  audit:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    uses: ./.github/workflows/audit.yml
+    secrets: inherit
+
+  vm-test:
+    needs: [changes, nix]
+    if: needs.changes.outputs.nix == 'true'
+    uses: ./.github/workflows/vm-test.yml
+    secrets: inherit

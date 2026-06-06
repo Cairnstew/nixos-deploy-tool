@@ -1,0 +1,30 @@
+MainScreen {
+    background: $panel;
+}
+
+.container {
+    align: center middle;
+    height: 100%;
+}
+
+.title {
+    text-style: bold;
+    text-align: center;
+    color: $accent;
+    margin-bottom: 1;
+}
+
+.subtitle {
+    text-align: center;
+    margin-bottom: 2;
+}
+
+.button-row {
+    align: center middle;
+    height: auto;
+}
+
+Button {
+    margin: 1;
+    min-width: 16;
+}

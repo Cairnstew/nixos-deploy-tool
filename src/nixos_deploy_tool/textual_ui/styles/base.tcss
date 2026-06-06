@@ -1,0 +1,11 @@
+Screen {
+    align: center middle;
+}
+
+DataTable {
+    height: 1fr;
+}
+
+Footer {
+    dock: bottom;
+}
