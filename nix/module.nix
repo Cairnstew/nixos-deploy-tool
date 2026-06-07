@@ -87,6 +87,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    environment.systemPackages = [ cfg.package ];
     environment.etc."nixos-deploy/config.json" = {
       text = builtins.toJSON cfg.settings;
       mode = "0444";
@@ -101,10 +102,8 @@ in
       restartTriggers = [ config.environment.etc."nixos-deploy/config.json".source ];
 
       serviceConfig = {
-        Type = "simple";
+        Type = "oneshot";
         ExecStart = "${cfg.package}/bin/nixos-deploy";
-        Restart = "on-failure";
-        RestartSec = "5s";
         NoNewPrivileges = true;
         ProtectSystem = "strict";
         ProtectHome = true;

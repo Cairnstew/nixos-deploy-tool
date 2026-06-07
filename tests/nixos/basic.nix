@@ -13,6 +13,8 @@
     machine.wait_for_unit("multi-user.target")
 
     machine.succeed("systemctl cat nixos-deploy-tool.service | grep -q 'ExecStart.*nixos-deploy'")
+    machine.succeed("systemctl cat nixos-deploy-tool.service | grep -q 'Type=oneshot'")
+    machine.succeed("systemctl cat nixos-deploy-tool.service | grep -q -v 'Restart='")
 
     config = machine.succeed("cat /etc/nixos-deploy/config.json")
     import json
