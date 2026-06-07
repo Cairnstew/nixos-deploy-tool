@@ -64,14 +64,14 @@ in
 
           agenixManagerBin = lib.mkOption {
             type = lib.types.str;
-            default = "${pkgs.agenix-manager}/bin/agenix-manager";
-            description = "Path to agenix-manager binary";
+            default = "";
+            description = "Path to agenix-manager binary (must be set explicitly)";
           };
 
           nixosAnywhereBin = lib.mkOption {
             type = lib.types.str;
-            default = "${pkgs.nixos-anywhere}/bin/nixos-anywhere";
-            description = "Path to nixos-anywhere binary";
+            default = "";
+            description = "Path to nixos-anywhere binary (must be set explicitly)";
           };
         };
       };
@@ -97,17 +97,18 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
 
+      environment = cfg.environment;
+      restartTriggers = [ config.environment.etc."nixos-deploy/config.json".source ];
+
       serviceConfig = {
         Type = "simple";
         ExecStart = "${cfg.package}/bin/nixos-deploy";
         Restart = "on-failure";
         RestartSec = "5s";
-        Environment = cfg.environment;
         NoNewPrivileges = true;
         ProtectSystem = "strict";
         ProtectHome = true;
         PrivateTmp = true;
-        RestartTriggers = [ config.environment.etc."nixos-deploy/config.json".source ];
       };
     };
   };

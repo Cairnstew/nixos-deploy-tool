@@ -134,7 +134,7 @@
 
       nixosModules.default = { pkgs, ... }: {
         imports = [ ./nix/module.nix ];
-        services.nixos-deploy-tool.package = lib.mkDefault self.packages.${pkgs.system}.default;
+        services.nixos-deploy-tool.package = lib.mkForce self.packages.${pkgs.system}.default;
       };
 
       homeManagerModules.default = import ./nix/home-module.nix;
