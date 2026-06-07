@@ -9,8 +9,19 @@
   };
 
   testScript = ''
+    start_all()
     machine.wait_for_unit("multi-user.target")
-    machine.succeed("test -f /etc/nixos-deploy/config.json")
+
+    machine.succeed("systemctl cat nixos-deploy-tool.service | grep -q 'ExecStart.*nixos-deploy'")
+
+    config = machine.succeed("cat /etc/nixos-deploy/config.json")
+    import json
+    parsed = json.loads(config)
+    assert "logLevel" in parsed
+    assert parsed["logLevel"] == "info"
+
     machine.succeed("nixos-deploy --help")
+    machine.succeed("nixos-deploy iso list")
+    machine.succeed("nixos-deploy secrets list")
   '';
 }

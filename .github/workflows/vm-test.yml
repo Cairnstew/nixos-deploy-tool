@@ -4,13 +4,38 @@ on:
   workflow_call:
 
 jobs:
-  vm-test:
+  vm-test-basic:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: DeterminateSystems/nix-installer-action@v16
       - uses: DeterminateSystems/flakehub-cache-action@v3
-
-      - name: Run VM tests
+      - name: Run basic VM test
         run: nix build .#vmTests.basic
+
+  vm-test-settings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/flakehub-cache-action@v3
+      - name: Run settings VM test
+        run: nix build .#vmTests.withSettings
+
+  vm-test-hm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/flakehub-cache-action@v3
+      - name: Run HM module eval test
+        run: nix build .#vmTests.hmModule
+
+  vm-test-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/flakehub-cache-action@v3
+      - name: Run service integrity test
+        run: nix build .#vmTests.serviceIntegrity
