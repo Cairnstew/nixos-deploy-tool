@@ -1,14 +1,39 @@
 from __future__ import annotations
 
+import json
+import logging
+import subprocess
 from pathlib import Path
+
+from nixos_deploy_tool.exceptions import SecretError
 
 
 class AgenixCatalog:
-    def __init__(self, flake_root: Path) -> None:
+    def __init__(self, flake_root: Path, secrets_dir: str = "secrets") -> None:
         self.flake_root = flake_root
+        self.secrets_dir = flake_root / secrets_dir
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def list_age_files(self) -> list[Path]:
-        return []
+        if not self.secrets_dir.is_dir():
+            return []
+        return sorted(self.secrets_dir.rglob("*.age"))
 
     def parse_secrets_nix(self) -> dict[str, object]:
-        return {}
+        secrets_nix = self.flake_root / "secrets.nix"
+        if not secrets_nix.is_file():
+            return {}
+        try:
+            result = subprocess.run(
+                ["nix", "eval", "--json", "--file", str(secrets_nix)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            data = json.loads(result.stdout)
+            if isinstance(data, dict):
+                return data
+            return {}
+        except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+            msg = f"Failed to evaluate {secrets_nix}: {exc}"
+            raise SecretError(msg) from exc

@@ -39,6 +39,8 @@ class DeployConfig(pydantic.BaseModel):
     live_iso_user: str = "nixos"
     tailscale: TailscaleConfig = pydantic.Field(default_factory=TailscaleConfig)
     paths: ToolPaths = pydantic.Field(default_factory=ToolPaths)
+    secrets_dir: str = "secrets"
+    ssh_key_path: str | None = None
 
 
 class SecretInjection(pydantic.BaseModel):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import typer
 
 from nixos_deploy_tool.cli.commands.base import BaseCommand
+from nixos_deploy_tool.cli.context import AppContext
 from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult
 from nixos_deploy_tool.services.deploy import DeployService
@@ -11,8 +12,10 @@ app = typer.Typer()
 
 
 class DeployRunCommand(BaseCommand):
-    host: str = ""
-    addr: str | None = None
+    def __init__(self, ctx: AppContext, host: str = "", addr: str | None = None) -> None:
+        super().__init__(ctx)
+        self.host = host
+        self.addr = addr
 
     def run(self) -> BaseResult:
         cfg = self.ctx.config or DeployConfig()
@@ -21,7 +24,9 @@ class DeployRunCommand(BaseCommand):
 
 
 class DeployWizardCommand(BaseCommand):
-    host: str = ""
+    def __init__(self, ctx: AppContext, host: str = "") -> None:
+        super().__init__(ctx)
+        self.host = host
 
     def run(self) -> BaseResult:
         cfg = self.ctx.config or DeployConfig()
@@ -30,7 +35,9 @@ class DeployWizardCommand(BaseCommand):
 
 
 class DeployWithKeysCommand(BaseCommand):
-    host: str = ""
+    def __init__(self, ctx: AppContext, host: str = "") -> None:
+        super().__init__(ctx)
+        self.host = host
 
     def run(self) -> BaseResult:
         cfg = self.ctx.config or DeployConfig()
@@ -39,7 +46,9 @@ class DeployWithKeysCommand(BaseCommand):
 
 
 class DeployTestCommand(BaseCommand):
-    host: str = ""
+    def __init__(self, ctx: AppContext, host: str = "") -> None:
+        super().__init__(ctx)
+        self.host = host
 
     def run(self) -> BaseResult:
         cfg = self.ctx.config or DeployConfig()
@@ -49,33 +58,29 @@ class DeployTestCommand(BaseCommand):
 
 @app.command()
 def run(ctx: typer.Context, host: str, addr: str | None = None) -> None:
-    cmd = DeployRunCommand(ctx.obj)
-    cmd.host = host
-    cmd.addr = addr
-    cmd.handle_result(cmd.run())
+    cmd = DeployRunCommand(ctx.obj, host=host, addr=addr)
+    cmd.execute()
 
 
 @app.command()
 def wizard(ctx: typer.Context, host: str) -> None:
-    cmd = DeployWizardCommand(ctx.obj)
-    cmd.host = host
-    cmd.handle_result(cmd.run())
+    cmd = DeployWizardCommand(ctx.obj, host=host)
+    cmd.execute()
 
 
 @app.command(name="with-keys")
 def with_keys(ctx: typer.Context, host: str) -> None:
-    cmd = DeployWithKeysCommand(ctx.obj)
-    cmd.host = host
-    cmd.handle_result(cmd.run())
+    cmd = DeployWithKeysCommand(ctx.obj, host=host)
+    cmd.execute()
 
 
 @app.command()
 def test(ctx: typer.Context, host: str) -> None:
-    cmd = DeployTestCommand(ctx.obj)
-    cmd.host = host
-    cmd.handle_result(cmd.run())
+    cmd = DeployTestCommand(ctx.obj, host=host)
+    cmd.execute()
 
 
-@app.callback(invoke_without_command=True)
+@app.callback()
 def deploy(ctx: typer.Context) -> None:
-    typer.echo("Deploy commands. Use: nixos-deploy deploy [run|wizard|with-keys|test]")
+    if ctx.invoked_subcommand is None:
+        typer.echo("Deploy commands. Use: nixos-deploy deploy [run|wizard|with-keys|test]")

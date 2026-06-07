@@ -2,28 +2,79 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nixos_deploy_tool.core.flake import FlakeIntrospector
+from nixos_deploy_tool.core.nix import NixRunner
+from nixos_deploy_tool.core.nixos_anywhere import NixosAnywhere
 from nixos_deploy_tool.models.config import DeployConfig
-from nixos_deploy_tool.models.result import BaseResult, SuccessResult
+from nixos_deploy_tool.models.result import BaseResult, ErrorResult, SuccessResult
 from nixos_deploy_tool.services.base import BaseService
 
 
 class DeployService(BaseService):
     def __init__(self, config: DeployConfig) -> None:
         super().__init__(config)
-        self._flake_root = Path(config.flake_root) if config.flake_root else Path.cwd()
+        flake_root = Path(config.flake_root) if config.flake_root else Path.cwd()
+        self._flake_root = flake_root
+        self._nixos_anywhere = NixosAnywhere(
+            binary=config.paths.nixos_anywhere_bin or "nixos-anywhere",
+        )
+        self._flake = FlakeIntrospector(flake_root)
+        self._nix = NixRunner()
+
+    def _resolve_host_attr(self, host: str) -> str:
+        hosts = self._flake.list_host_configs()
+        for h in hosts:
+            if h["name"] == host:
+                return h["attr"]
+        return host
 
     def run(self, host: str, addr: str | None = None) -> BaseResult:
         self.logger.info("Deploying to %s (addr=%s)", host, addr or "auto")
-        return SuccessResult(message=f"Deployed {host}.")
+        try:
+            target = addr or host
+            attr = self._resolve_host_attr(host)
+            self._nixos_anywhere.deploy(
+                target=target,
+                flake_attr=attr,
+                flake_root=self._flake_root,
+            )
+            return SuccessResult(message=f"Deployed {host}.")
+        except Exception as exc:
+            return ErrorResult(message=f"Deploy failed: {exc}")
 
     def wizard(self, host: str) -> BaseResult:
         self.logger.info("Running deploy wizard for %s", host)
-        return SuccessResult(message=f"Wizard completed for {host}.")
+        try:
+            attr = self._resolve_host_attr(host)
+            self._nixos_anywhere.deploy(
+                target=host,
+                flake_attr=attr,
+                flake_root=self._flake_root,
+            )
+            return SuccessResult(message=f"Wizard completed for {host}.")
+        except Exception as exc:
+            return ErrorResult(message=f"Wizard failed: {exc}")
 
     def with_keys(self, host: str) -> BaseResult:
         self.logger.info("Deploying with keys to %s", host)
-        return SuccessResult(message=f"Deployed {host} with keys.")
+        try:
+            attr = self._resolve_host_attr(host)
+            ssh_key = self.config.ssh_key_path
+            self._nixos_anywhere.deploy(
+                target=host,
+                flake_attr=attr,
+                flake_root=self._flake_root,
+                ssh_key=ssh_key,
+            )
+            return SuccessResult(message=f"Deployed {host} with keys.")
+        except Exception as exc:
+            return ErrorResult(message=f"Deploy with keys failed: {exc}")
 
     def test(self, host: str) -> BaseResult:
         self.logger.info("VM-testing host config: %s", host)
-        return SuccessResult(message=f"Test passed for {host}.")
+        try:
+            attr = self._resolve_host_attr(host)
+            self._nix.build(attr=attr, flake_root=self._flake_root)
+            return SuccessResult(message=f"Test passed for {host}.")
+        except Exception as exc:
+            return ErrorResult(message=f"Test failed: {exc}")

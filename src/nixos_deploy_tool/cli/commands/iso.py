@@ -3,6 +3,7 @@ from __future__ import annotations
 import typer
 
 from nixos_deploy_tool.cli.commands.base import BaseCommand
+from nixos_deploy_tool.cli.context import AppContext
 from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult
 from nixos_deploy_tool.services.iso import ISOService
@@ -11,7 +12,9 @@ app = typer.Typer()
 
 
 class ISOBuildCommand(BaseCommand):
-    name: str = ""
+    def __init__(self, ctx: AppContext, name: str = "") -> None:
+        super().__init__(ctx)
+        self.name = name
 
     def run(self) -> BaseResult:
         cfg = self.ctx.config or DeployConfig()
@@ -32,7 +35,9 @@ class ISOListCommand(BaseCommand):
 
 
 class ISORotateKeysCommand(BaseCommand):
-    name: str = ""
+    def __init__(self, ctx: AppContext, name: str = "") -> None:
+        super().__init__(ctx)
+        self.name = name
 
     def run(self) -> BaseResult:
         cfg = self.ctx.config or DeployConfig()
@@ -41,7 +46,9 @@ class ISORotateKeysCommand(BaseCommand):
 
 
 class ISOInfoCommand(BaseCommand):
-    name: str = ""
+    def __init__(self, ctx: AppContext, name: str = "") -> None:
+        super().__init__(ctx)
+        self.name = name
 
     def run(self) -> BaseResult:
         cfg = self.ctx.config or DeployConfig()
@@ -56,33 +63,31 @@ class ISOInfoCommand(BaseCommand):
         return SuccessResult(message=f"Info for {self.name}.")
 
 
-@app.callback(invoke_without_command=True)
+@app.callback()
 def iso(ctx: typer.Context) -> None:
-    typer.echo("ISO commands. Use: nixos-deploy iso [build|list|rotate-keys|info]")
+    if ctx.invoked_subcommand is None:
+        typer.echo("ISO commands. Use: nixos-deploy iso [build|list|rotate-keys|info]")
 
 
 @app.command()
 def build(ctx: typer.Context, name: str) -> None:
-    cmd = ISOBuildCommand(ctx.obj)
-    cmd.name = name
-    cmd.handle_result(cmd.run())
+    cmd = ISOBuildCommand(ctx.obj, name=name)
+    cmd.execute()
 
 
 @app.command()
 def list(ctx: typer.Context) -> None:  # noqa: A001
     cmd = ISOListCommand(ctx.obj)
-    cmd.handle_result(cmd.run())
+    cmd.execute()
 
 
 @app.command(name="rotate-keys")
 def rotate_keys(ctx: typer.Context, name: str) -> None:
-    cmd = ISORotateKeysCommand(ctx.obj)
-    cmd.name = name
-    cmd.handle_result(cmd.run())
+    cmd = ISORotateKeysCommand(ctx.obj, name=name)
+    cmd.execute()
 
 
 @app.command()
 def info(ctx: typer.Context, name: str) -> None:
-    cmd = ISOInfoCommand(ctx.obj)
-    cmd.name = name
-    cmd.handle_result(cmd.run())
+    cmd = ISOInfoCommand(ctx.obj, name=name)
+    cmd.execute()

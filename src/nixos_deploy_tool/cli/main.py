@@ -10,8 +10,8 @@ from nixos_deploy_tool.cli.commands import (
     secrets_app,
     tailscale_app,
 )
+from nixos_deploy_tool.cli.config_loader import load_config
 from nixos_deploy_tool.cli.context import AppContext
-from nixos_deploy_tool.models.config import DeployConfig
 
 app = typer.Typer(no_args_is_help=True)
 app.add_typer(iso_app, name="iso")
@@ -20,7 +20,11 @@ app.add_typer(tailscale_app, name="tailscale")
 app.add_typer(secrets_app, name="secrets")
 
 
-def _default_flake_root() -> Path | None:
+def _resolve_flake_root(flake_arg: Path | None, config: str) -> Path | None:
+    if flake_arg:
+        return flake_arg.resolve()
+    if config:
+        return Path(config)
     cwd = Path.cwd()
     if (cwd / "flake.nix").exists():
         return cwd
@@ -34,8 +38,8 @@ def main(
     flake_root: Path | None = None,
 ) -> None:
     ctx.ensure_object(dict)
-    resolved_root = flake_root or _default_flake_root()
-    config = DeployConfig()
+    config = load_config()
+    resolved_root = _resolve_flake_root(flake_root, config.flake_root)
     if resolved_root:
         config.flake_root = str(resolved_root)
     ctx.obj = AppContext(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import typer
 
 from nixos_deploy_tool.cli.context import AppContext
+from nixos_deploy_tool.exceptions import NixosDeployError
 from nixos_deploy_tool.models.result import BaseResult
 
 
@@ -12,6 +13,16 @@ class BaseCommand:
 
     def run(self) -> BaseResult:
         raise NotImplementedError
+
+    def execute(self) -> None:
+        try:
+            result = self.run()
+        except NixosDeployError as exc:
+            self.abort(str(exc))
+        except Exception as exc:
+            self.abort(f"Unexpected error: {exc}")
+        else:
+            self.handle_result(result)
 
     def handle_result(self, result: BaseResult) -> None:
         if result.ok:
