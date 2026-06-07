@@ -14,11 +14,20 @@ class NixRunner:
         for key, val in kwargs.items():
             cmd.extend([f"--{key.replace('_', '-')}", val])
         self._logger.info("Running: %s", " ".join(cmd))
-        return subprocess.run(cmd, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
+            )
+        return result
 
     def eval_json(self, expr: str, flake_root: Path | None = None) -> str:
         cmd = ["nix", "eval", "--json", "--expr", expr]
         if flake_root:
             cmd.extend(["--option", "flake", str(flake_root)])
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
+            )
         return result.stdout.strip()

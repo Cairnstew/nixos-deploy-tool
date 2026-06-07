@@ -14,7 +14,11 @@ class FlakeIntrospector:
 
     def show_json(self) -> dict[str, Any]:
         cmd = ["nix", "flake", "show", "--json", str(self.flake_root)]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
+            )
         return cast("dict[str, Any]", json.loads(result.stdout))
 
     def list_iso_configs(self) -> list[dict[str, object]]:

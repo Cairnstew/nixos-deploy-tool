@@ -30,4 +30,9 @@ class NixosAnywhere:
         if extra_args:
             cmd.extend(extra_args)
         self._logger.info("Running: %s", " ".join(cmd))
-        return subprocess.run(cmd, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
+            )
+        return result
