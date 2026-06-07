@@ -14,10 +14,10 @@ class NixRunner:
         for key, val in kwargs.items():
             cmd.extend([f"--{key.replace('_', '-')}", val])
         self._logger.info("Running: %s", " ".join(cmd))
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
         if result.returncode != 0:
             raise RuntimeError(
-                f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
+                f"`{' '.join(cmd)}` failed (exit {result.returncode})"
             )
         return result
 

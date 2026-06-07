@@ -14,10 +14,10 @@ class FlakeIntrospector:
 
     def show_json(self) -> dict[str, Any]:
         cmd = ["nix", "flake", "show", "--json", str(self.flake_root)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
         if result.returncode != 0:
             raise RuntimeError(
-                f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
+                f"`{' '.join(cmd)}` failed (exit {result.returncode})"
             )
         return cast("dict[str, Any]", json.loads(result.stdout))
 

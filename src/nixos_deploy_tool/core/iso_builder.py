@@ -28,9 +28,8 @@ class ISOBuilder:
         if extra_nixos_module:
             cmd.extend(["--extra-nixos-module", extra_nixos_module])
         self._logger.info("Running: %s", " ".join(cmd))
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            return Path(result.stdout.strip())
-        except subprocess.CalledProcessError as exc:
-            msg = f"ISO build failed: {exc.stderr.strip()}"
-            raise ISOBuildError(msg) from exc
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            msg = f"ISO build failed: `{' '.join(cmd)}` (exit {result.returncode})"
+            raise ISOBuildError(msg)
+        return Path(result.stdout.strip())
