@@ -44,7 +44,7 @@ class NixosAnywhere:
             target,
         ]
         if ssh_key:
-            cmd.extend(["-i", ssh_key])
+            cmd.extend(["-i", ssh_key, "--no-ssh-copy-id"])
         if extra_files:
             cmd.extend(["--extra-files", str(extra_files)])
         if extra_args:

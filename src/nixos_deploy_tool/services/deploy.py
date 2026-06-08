@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shlex
 from pathlib import Path
 
@@ -38,7 +39,16 @@ class DeployService(BaseService):
                 return str(p)
             self.logger.warning("Configured ssh_key_path '%s' not found, trying defaults", cfg_key)
 
-        for candidate in ["~/.ssh/id_ed25519", "~/.ssh/id_rsa", "~/.ssh/id_ecdsa"]:
+        sudo_user = os.environ.get("SUDO_USER")
+        candidates = ["~/.ssh/id_ed25519", "~/.ssh/id_rsa", "~/.ssh/id_ecdsa"]
+        if sudo_user:
+            candidates = [
+                f"~{sudo_user}/.ssh/id_ed25519",
+                f"~{sudo_user}/.ssh/id_rsa",
+                f"~{sudo_user}/.ssh/id_ecdsa",
+            ] + candidates
+
+        for candidate in candidates:
             p = Path(candidate).expanduser()
             if p.exists():
                 self.logger.info("Using SSH identity key: %s", p)
