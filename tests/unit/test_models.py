@@ -16,6 +16,26 @@ def test_deployconfig_serialise() -> None:
     assert d["log_level"] == "debug"
 
 
+def test_deployconfig_default_extra_args_defaults_to_empty_list() -> None:
+    cfg = DeployConfig()
+    assert cfg.default_extra_args == []
+
+
+def test_deployconfig_skip_disko_defaults_to_false() -> None:
+    cfg = DeployConfig()
+    assert cfg.skip_disko is False
+
+
+def test_deployconfig_disko_mode_defaults_to_none() -> None:
+    cfg = DeployConfig()
+    assert cfg.disko_mode is None
+
+
+def test_deployconfig_auto_detect_disko_defaults_to_false() -> None:
+    cfg = DeployConfig()
+    assert cfg.auto_detect_disko is False
+
+
 def test_success_result_defaults() -> None:
     r = SuccessResult(message="done")
     assert r.ok is True

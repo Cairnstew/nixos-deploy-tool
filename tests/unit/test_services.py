@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+from nixos_deploy_tool.exceptions import NixEvalError
 from nixos_deploy_tool.models.config import DeployConfig, TailscaleConfig, TailscaleOAuthConfig
 from nixos_deploy_tool.services.base import BaseService
 from nixos_deploy_tool.services.deploy import DeployService
@@ -118,6 +119,113 @@ def test_deployservice_with_keys_defaults_to_host_when_no_addr(mock_exists, mock
     assert result.ok
     target = mock_deploy.call_args.kwargs["target"]
     assert target == "myhost"
+
+
+def test_build_extra_args_empty_config() -> None:
+    svc = DeployService(DeployConfig())
+    result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == []
+
+
+def test_build_extra_args_default_extra_args() -> None:
+    cfg = DeployConfig(default_extra_args=["--verbose"])
+    svc = DeployService(cfg)
+    result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == ["--verbose"]
+
+
+def test_build_extra_args_skip_disko() -> None:
+    cfg = DeployConfig(skip_disko=True)
+    svc = DeployService(cfg)
+    result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == ["--phases", "kexec,install,reboot"]
+
+
+def test_build_extra_args_disko_mode_mount() -> None:
+    cfg = DeployConfig(disko_mode="mount")
+    svc = DeployService(cfg)
+    result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == ["--disko-mode", "mount"]
+
+
+def test_build_extra_args_defaults_plus_skip_disko() -> None:
+    cfg = DeployConfig(default_extra_args=["--verbose"], skip_disko=True)
+    svc = DeployService(cfg)
+    result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == ["--verbose", "--phases", "kexec,install,reboot"]
+
+
+def test_build_extra_args_skip_disko_logs_warning_when_conflicting() -> None:
+    cfg = DeployConfig(skip_disko=True, disko_mode="mount")
+    svc = DeployService(cfg)
+    with patch.object(svc.logger, "debug") as mock_debug:
+        result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == ["--phases", "kexec,install,reboot"]
+    mock_debug.assert_any_call(
+        "skip_disko=true overrides disko_mode=%s", "mount"
+    )
+
+
+def test_build_extra_args_disko_mode_no_eval() -> None:
+    cfg = DeployConfig(disko_mode="mount", auto_detect_disko=True)
+    svc = DeployService(cfg)
+    with patch.object(svc._nix, "eval_flake_json") as mock_eval:
+        result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == ["--disko-mode", "mount"]
+    mock_eval.assert_not_called()
+
+
+def test_build_extra_args_auto_detect_skips_when_missing() -> None:
+    cfg = DeployConfig(auto_detect_disko=True)
+    svc = DeployService(cfg)
+    with patch.object(
+        svc._nix, "eval_flake_json", side_effect=NixEvalError("not found")
+    ):
+        result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == ["--phases", "kexec,install,reboot"]
+
+
+def test_build_extra_args_auto_detect_no_skip_when_present() -> None:
+    cfg = DeployConfig(auto_detect_disko=True)
+    svc = DeployService(cfg)
+    with patch.object(
+        svc._nix, "eval_flake_json", return_value="/nix/store/abc-disko-script"
+    ):
+        result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == []
+
+
+def test_build_extra_args_cli_appended_last() -> None:
+    cfg = DeployConfig(default_extra_args=["--phases", "kexec,disko"])
+    svc = DeployService(cfg)
+    result = svc._build_extra_args(
+        "myhost", "--phases kexec,install,reboot", Path("/fake/flake")
+    )
+    assert result == [
+        "--phases", "kexec,disko",
+        "--phases", "kexec,install,reboot",
+    ]
+
+
+@patch("nixos_deploy_tool.services.deploy.NixosAnywhere.deploy")
+@patch("nixos_deploy_tool.services.deploy.KeyStore.exists", return_value=True)
+def test_deployservice_wizard_accepts_extra_args(mock_exists, mock_deploy) -> None:
+    mock_deploy.return_value = None
+    svc = DeployService(DeployConfig())
+    result = svc.wizard("myhost", addr="nixos@10.0.0.1", extra_args="--verbose")
+    assert result.ok
+    _, kwargs = mock_deploy.call_args
+    assert kwargs["target"] == "nixos@10.0.0.1"
+    assert "--verbose" in kwargs["extra_args"]
+
+
+def test_build_extra_args_skip_disko_overrides_auto_detect() -> None:
+    cfg = DeployConfig(skip_disko=True, auto_detect_disko=True)
+    svc = DeployService(cfg)
+    with patch.object(svc._nix, "eval_flake_json") as mock_eval:
+        result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == ["--phases", "kexec,install,reboot"]
+    mock_eval.assert_not_called()
 
 
 @patch("nixos_deploy_tool.services.prepare.KeyStore")

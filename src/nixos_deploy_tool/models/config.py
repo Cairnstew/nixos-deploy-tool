@@ -41,6 +41,10 @@ class DeployConfig(pydantic.BaseModel):
     paths: ToolPaths = pydantic.Field(default_factory=ToolPaths)
     secrets_dir: str = "secrets"
     ssh_key_path: str | None = None
+    default_extra_args: list[str] = pydantic.Field(default_factory=list)
+    skip_disko: bool = False
+    disko_mode: str | None = None
+    auto_detect_disko: bool = False
 
 
 class SecretInjection(pydantic.BaseModel):

@@ -19,3 +19,7 @@ class SecretError(NixosDeployError):
 
 class TailscaleAPIError(NixosDeployError):
     """Raised when Tailscale API call fails."""
+
+
+class NixEvalError(NixosDeployError):
+    """Raised when nix eval fails (e.g. attribute missing)."""

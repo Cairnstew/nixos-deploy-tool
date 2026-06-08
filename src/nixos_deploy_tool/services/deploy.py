@@ -8,6 +8,7 @@ from nixos_deploy_tool.core.flake import FlakeIntrospector
 from nixos_deploy_tool.core.key_store import KeyStore
 from nixos_deploy_tool.core.nix import NixRunner
 from nixos_deploy_tool.core.nixos_anywhere import NixosAnywhere
+from nixos_deploy_tool.exceptions import NixEvalError
 from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult, ErrorResult, SuccessResult
 from nixos_deploy_tool.services.base import BaseService
@@ -65,6 +66,47 @@ class DeployService(BaseService):
         self.logger.info("No stored keypair found for '%s', host key will be random", host)
         return None
 
+    def _build_extra_args(
+        self,
+        host_name: str,
+        cli_extra_args: str | None,
+        flake_root: Path,
+    ) -> list[str]:
+        args: list[str] = list(self.config.default_extra_args)
+
+        if self.config.skip_disko:
+            if self.config.disko_mode:
+                self.logger.debug(
+                    "skip_disko=true overrides disko_mode=%s", self.config.disko_mode
+                )
+            if self.config.auto_detect_disko:
+                self.logger.debug("skip_disko=true overrides auto_detect_disko=true")
+            args.extend(["--phases", "kexec,install,reboot"])
+
+        elif self.config.disko_mode:
+            if self.config.auto_detect_disko:
+                self.logger.debug(
+                    "disko_mode=%s overrides auto_detect_disko=true",
+                    self.config.disko_mode,
+                )
+            args.extend(["--disko-mode", self.config.disko_mode])
+
+        elif self.config.auto_detect_disko:
+            try:
+                self._nix.eval_flake_json(
+                    f'nixosConfigurations."{host_name}".config.system.build.diskoScript',
+                    flake_root,
+                )
+                self.logger.debug("diskoScript found — disko phase will run")
+            except NixEvalError:
+                self.logger.info("diskoScript not found — skipping disko phase")
+                args.extend(["--phases", "kexec,install,reboot"])
+
+        if cli_extra_args:
+            args.extend(shlex.split(cli_extra_args))
+
+        return args
+
     def run(self, host: str, addr: str | None = None, extra_args: str | None = None) -> BaseResult:
         self.logger.info("Deploying to %s (addr=%s)", host, addr or "auto")
         try:
@@ -74,21 +116,23 @@ class DeployService(BaseService):
                 target=target,
                 flake_attr=attr,
                 flake_root=self._flake_root,
-                extra_args=shlex.split(extra_args) if extra_args else None,
+                extra_args=self._build_extra_args(host, extra_args, self._flake_root),
                 extra_files=self._resolve_extra_files(host),
             )
             return SuccessResult(message=f"Deployed {host}.")
         except Exception as exc:
             return ErrorResult(message=f"Deploy failed: {exc}")
 
-    def wizard(self, host: str) -> BaseResult:
-        self.logger.info("Running deploy wizard for %s", host)
+    def wizard(self, host: str, addr: str | None = None, extra_args: str | None = None) -> BaseResult:
+        self.logger.info("Running deploy wizard for %s (addr=%s)", host, addr or "auto")
         try:
+            target = addr or host
             attr = self._resolve_host_attr(host)
             self._nixos_anywhere.deploy(
-                target=host,
+                target=target,
                 flake_attr=attr,
                 flake_root=self._flake_root,
+                extra_args=self._build_extra_args(host, extra_args, self._flake_root),
             )
             return SuccessResult(message=f"Wizard completed for {host}.")
         except Exception as exc:
@@ -105,7 +149,7 @@ class DeployService(BaseService):
                 flake_attr=attr,
                 flake_root=self._flake_root,
                 ssh_key=ssh_key,
-                extra_args=shlex.split(extra_args) if extra_args else None,
+                extra_args=self._build_extra_args(host, extra_args, self._flake_root),
                 extra_files=self._resolve_extra_files(host),
             )
             return SuccessResult(message=f"Deployed {host} with keys.")

@@ -4,6 +4,8 @@ import logging
 import subprocess
 from pathlib import Path
 
+from nixos_deploy_tool.exceptions import NixEvalError
+
 
 class NixRunner:
     def __init__(self) -> None:
@@ -29,5 +31,14 @@ class NixRunner:
         if result.returncode != 0:
             raise RuntimeError(
                 f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
+            )
+        return result.stdout.strip()
+
+    def eval_flake_json(self, attr: str, flake_root: Path) -> str:
+        cmd = ["nix", "eval", "--json", f"{flake_root}#{attr}"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise NixEvalError(
+                f"Failed to eval '{attr}': {result.stderr.strip()}"
             )
         return result.stdout.strip()

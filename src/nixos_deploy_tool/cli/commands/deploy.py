@@ -31,14 +31,22 @@ class DeployRunCommand(BaseCommand):
 
 
 class DeployWizardCommand(BaseCommand):
-    def __init__(self, ctx: AppContext, host: str = "") -> None:
+    def __init__(
+        self,
+        ctx: AppContext,
+        host: str = "",
+        addr: str | None = None,
+        extra_args: str | None = None,
+    ) -> None:
         super().__init__(ctx)
         self.host = host
+        self.addr = addr
+        self.extra_args = extra_args
 
     def run(self) -> BaseResult:
         cfg = self.ctx.config or DeployConfig()
         svc = DeployService(cfg)
-        return svc.wizard(self.host)
+        return svc.wizard(self.host, self.addr, self.extra_args)
 
 
 class DeployWithKeysCommand(BaseCommand):
@@ -85,8 +93,15 @@ def run(
 
 
 @app.command()
-def wizard(ctx: typer.Context, host: str) -> None:
-    cmd = DeployWizardCommand(ctx.obj, host=host)
+def wizard(
+    ctx: typer.Context,
+    host: str,
+    addr: str | None = None,
+    extra_args: str | None = typer.Option(
+        None, "--extra-args", help="Extra arguments forwarded to nixos-anywhere"
+    ),
+) -> None:
+    cmd = DeployWizardCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args)
     cmd.execute()
 
 
