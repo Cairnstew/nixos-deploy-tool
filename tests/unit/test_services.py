@@ -68,6 +68,28 @@ def test_deployservice_with_keys_injects_extra_files(mock_exists, mock_deploy) -
     assert kwargs["extra_files"] is not None
 
 
+@patch("nixos_deploy_tool.services.deploy.NixosAnywhere.deploy")
+@patch("nixos_deploy_tool.services.deploy.KeyStore.exists", return_value=False)
+def test_deployservice_with_keys_uses_addr_when_provided(mock_exists, mock_deploy) -> None:
+    mock_deploy.return_value = None
+    svc = DeployService(DeployConfig())
+    result = svc.with_keys("myhost", addr="nixos@10.0.0.1")
+    assert result.ok
+    target = mock_deploy.call_args.kwargs["target"]
+    assert target == "nixos@10.0.0.1"
+
+
+@patch("nixos_deploy_tool.services.deploy.NixosAnywhere.deploy")
+@patch("nixos_deploy_tool.services.deploy.KeyStore.exists", return_value=False)
+def test_deployservice_with_keys_defaults_to_host_when_no_addr(mock_exists, mock_deploy) -> None:
+    mock_deploy.return_value = None
+    svc = DeployService(DeployConfig())
+    result = svc.with_keys("myhost")
+    assert result.ok
+    target = mock_deploy.call_args.kwargs["target"]
+    assert target == "myhost"
+
+
 @patch("nixos_deploy_tool.services.prepare.KeyStore")
 def test_prepareservice_new_key(mock_keystore_cls) -> None:
     mock_ks = MagicMock()

@@ -67,13 +67,14 @@ class DeployService(BaseService):
         except Exception as exc:
             return ErrorResult(message=f"Wizard failed: {exc}")
 
-    def with_keys(self, host: str, extra_args: str | None = None) -> BaseResult:
-        self.logger.info("Deploying with keys to %s", host)
+    def with_keys(self, host: str, addr: str | None = None, extra_args: str | None = None) -> BaseResult:
+        self.logger.info("Deploying with keys to %s (addr=%s)", host, addr or "auto")
         try:
             attr = self._resolve_host_attr(host)
+            target = addr or host
             ssh_key = self.config.ssh_key_path
             self._nixos_anywhere.deploy(
-                target=host,
+                target=target,
                 flake_attr=attr,
                 flake_root=self._flake_root,
                 ssh_key=ssh_key,
