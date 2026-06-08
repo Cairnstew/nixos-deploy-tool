@@ -18,6 +18,7 @@ in
 
     settings = lib.mkOption {
       type = lib.types.submodule {
+        freeformType = lib.types.attrsOf lib.types.raw;
         options = {
           flakeRoot = lib.mkOption {
             type = lib.types.str;
