@@ -26,7 +26,7 @@ class NixosAnywhere:
             target,
         ]
         if ssh_key:
-            cmd.extend(["--ssh-key", ssh_key])
+            cmd.extend(["-i", ssh_key])
         if extra_args:
             cmd.extend(extra_args)
         self._logger.info("Running: %s", " ".join(cmd))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 from nixos_deploy_tool.core.flake import FlakeIntrospector
@@ -28,7 +29,7 @@ class DeployService(BaseService):
                 return h["attr"]
         return host
 
-    def run(self, host: str, addr: str | None = None) -> BaseResult:
+    def run(self, host: str, addr: str | None = None, extra_args: str | None = None) -> BaseResult:
         self.logger.info("Deploying to %s (addr=%s)", host, addr or "auto")
         try:
             target = addr or host
@@ -37,6 +38,7 @@ class DeployService(BaseService):
                 target=target,
                 flake_attr=attr,
                 flake_root=self._flake_root,
+                extra_args=shlex.split(extra_args) if extra_args else None,
             )
             return SuccessResult(message=f"Deployed {host}.")
         except Exception as exc:
@@ -55,7 +57,7 @@ class DeployService(BaseService):
         except Exception as exc:
             return ErrorResult(message=f"Wizard failed: {exc}")
 
-    def with_keys(self, host: str) -> BaseResult:
+    def with_keys(self, host: str, extra_args: str | None = None) -> BaseResult:
         self.logger.info("Deploying with keys to %s", host)
         try:
             attr = self._resolve_host_attr(host)
@@ -65,6 +67,7 @@ class DeployService(BaseService):
                 flake_attr=attr,
                 flake_root=self._flake_root,
                 ssh_key=ssh_key,
+                extra_args=shlex.split(extra_args) if extra_args else None,
             )
             return SuccessResult(message=f"Deployed {host} with keys.")
         except Exception as exc:
