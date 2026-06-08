@@ -4,6 +4,7 @@ import shlex
 from pathlib import Path
 
 from nixos_deploy_tool.core.flake import FlakeIntrospector
+from nixos_deploy_tool.core.key_store import KeyStore
 from nixos_deploy_tool.core.nix import NixRunner
 from nixos_deploy_tool.core.nixos_anywhere import NixosAnywhere
 from nixos_deploy_tool.models.config import DeployConfig
@@ -29,6 +30,14 @@ class DeployService(BaseService):
                 return h["attr"]
         return host
 
+    def _resolve_extra_files(self, host: str) -> Path | None:
+        keystore = KeyStore()
+        if keystore.exists(host):
+            self.logger.info("Using stored host keypair for '%s'", host)
+            return keystore.extra_files_dir(host)
+        self.logger.info("No stored keypair found for '%s', host key will be random", host)
+        return None
+
     def run(self, host: str, addr: str | None = None, extra_args: str | None = None) -> BaseResult:
         self.logger.info("Deploying to %s (addr=%s)", host, addr or "auto")
         try:
@@ -39,6 +48,7 @@ class DeployService(BaseService):
                 flake_attr=attr,
                 flake_root=self._flake_root,
                 extra_args=shlex.split(extra_args) if extra_args else None,
+                extra_files=self._resolve_extra_files(host),
             )
             return SuccessResult(message=f"Deployed {host}.")
         except Exception as exc:
@@ -68,6 +78,7 @@ class DeployService(BaseService):
                 flake_root=self._flake_root,
                 ssh_key=ssh_key,
                 extra_args=shlex.split(extra_args) if extra_args else None,
+                extra_files=self._resolve_extra_files(host),
             )
             return SuccessResult(message=f"Deployed {host} with keys.")
         except Exception as exc:

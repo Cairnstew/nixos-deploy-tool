@@ -18,6 +18,7 @@ class NixosAnywhere:
         flake_root: Path,
         ssh_key: str | None = None,
         extra_args: Sequence[str] | None = None,
+        extra_files: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         cmd = [
             self._binary,
@@ -27,6 +28,8 @@ class NixosAnywhere:
         ]
         if ssh_key:
             cmd.extend(["-i", ssh_key])
+        if extra_files:
+            cmd.extend(["--extra-files", str(extra_files)])
         if extra_args:
             cmd.extend(extra_args)
         self._logger.info("Running: %s", " ".join(cmd))

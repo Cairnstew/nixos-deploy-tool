@@ -32,3 +32,13 @@ def test_cli_tailscale_status(runner: CliRunner, cli) -> None:
 def test_cli_secrets_list(runner: CliRunner, cli) -> None:
     result = runner.invoke(cli, ["secrets", "list"])
     assert result.exit_code == 0
+
+
+def test_cli_prepare_help(runner: CliRunner, cli) -> None:
+    result = runner.invoke(cli, ["prepare", "--help"])
+    assert result.exit_code == 0
+
+
+def test_cli_prepare_requires_host(runner: CliRunner, cli) -> None:
+    result = runner.invoke(cli, ["prepare"])
+    assert result.exit_code != 0

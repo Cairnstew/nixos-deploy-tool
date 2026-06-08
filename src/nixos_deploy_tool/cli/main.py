@@ -7,6 +7,7 @@ import typer
 from nixos_deploy_tool.cli.commands import (
     deploy_app,
     iso_app,
+    prepare_app,
     secrets_app,
     tailscale_app,
 )
@@ -16,6 +17,7 @@ from nixos_deploy_tool.cli.context import AppContext
 app = typer.Typer(no_args_is_help=True)
 app.add_typer(iso_app, name="iso")
 app.add_typer(deploy_app, name="deploy")
+app.add_typer(prepare_app, name="prepare")
 app.add_typer(tailscale_app, name="tailscale")
 app.add_typer(secrets_app, name="secrets")
 
