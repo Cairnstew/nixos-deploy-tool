@@ -70,7 +70,7 @@ def test_deploy_clears_known_hosts_before_running(mock_run) -> None:
 
 
 @patch("nixos_deploy_tool.core.nixos_anywhere.subprocess.run")
-def test_deploy_includes_no_ssh_copy_id_when_key_provided(mock_run) -> None:
+def test_deploy_includes_i_flag_when_key_provided(mock_run) -> None:
     mock_run.return_value.returncode = 0
 
     nix = NixosAnywhere()
@@ -83,6 +83,6 @@ def test_deploy_includes_no_ssh_copy_id_when_key_provided(mock_run) -> None:
 
     nixos_anywhere_call = mock_run.call_args_list[-1]
     args = nixos_anywhere_call[0][0]
-    assert "--no-ssh-copy-id" in args
     assert "-i" in args
     assert "/home/user/.ssh/id_ed25519" in args
+    assert "--no-ssh-copy-id" not in args
