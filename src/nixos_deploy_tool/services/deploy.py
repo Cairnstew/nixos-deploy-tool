@@ -30,6 +30,23 @@ class DeployService(BaseService):
                 return h["attr"]
         return host
 
+    def _resolve_ssh_key(self) -> str | None:
+        cfg_key = self.config.ssh_key_path
+        if cfg_key:
+            p = Path(cfg_key).expanduser()
+            if p.exists():
+                return str(p)
+            self.logger.warning("Configured ssh_key_path '%s' not found, trying defaults", cfg_key)
+
+        for candidate in ["~/.ssh/id_ed25519", "~/.ssh/id_rsa", "~/.ssh/id_ecdsa"]:
+            p = Path(candidate).expanduser()
+            if p.exists():
+                self.logger.info("Using SSH identity key: %s", p)
+                return str(p)
+
+        self.logger.warning("No SSH identity key found — password prompt will be required for live ISO auth")
+        return None
+
     def _resolve_extra_files(self, host: str) -> Path | None:
         keystore = KeyStore()
         if keystore.exists(host):
@@ -72,7 +89,7 @@ class DeployService(BaseService):
         try:
             attr = self._resolve_host_attr(host)
             target = addr or host
-            ssh_key = self.config.ssh_key_path
+            ssh_key = self._resolve_ssh_key()
             self._nixos_anywhere.deploy(
                 target=target,
                 flake_attr=attr,

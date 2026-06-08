@@ -58,6 +58,36 @@ def test_deployservice_run_no_extra_files_when_key_missing(mock_exists, mock_dep
 
 
 @patch("nixos_deploy_tool.services.deploy.NixosAnywhere.deploy")
+@patch("nixos_deploy_tool.services.deploy.Path.exists", return_value=True)
+def test_deployservice_with_keys_uses_configured_ssh_key(mock_exists, mock_deploy) -> None:
+    mock_deploy.return_value = None
+    cfg = DeployConfig(ssh_key_path="/custom/key")
+    svc = DeployService(cfg)
+    result = svc.with_keys("myhost")
+    assert result.ok
+    _, kwargs = mock_deploy.call_args
+    assert kwargs["ssh_key"] == "/custom/key"
+
+
+
+
+
+@patch("nixos_deploy_tool.services.deploy.NixosAnywhere.deploy")
+@patch("nixos_deploy_tool.services.deploy.KeyStore.exists", return_value=True)
+def test_deployservice_with_keys_no_ssh_key_found(mock_exists, mock_deploy) -> None:
+    mock_deploy.return_value = None
+    cfg = DeployConfig(ssh_key_path=None)
+
+    with patch("nixos_deploy_tool.services.deploy.Path.exists", return_value=False):
+        svc = DeployService(cfg)
+        result = svc.with_keys("myhost")
+
+    assert result.ok
+    _, kwargs = mock_deploy.call_args
+    assert kwargs["ssh_key"] is None
+
+
+@patch("nixos_deploy_tool.services.deploy.NixosAnywhere.deploy")
 @patch("nixos_deploy_tool.services.deploy.KeyStore.exists", return_value=True)
 def test_deployservice_with_keys_injects_extra_files(mock_exists, mock_deploy) -> None:
     mock_deploy.return_value = None
