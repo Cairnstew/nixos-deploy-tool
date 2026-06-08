@@ -9,7 +9,11 @@ from pathlib import Path
 
 class KeyStore:
     def __init__(self, base_dir: Path | None = None) -> None:
-        self._base_dir = (base_dir or Path("~/.local/share/nixos-deploy/keys")).expanduser().resolve()
+        if base_dir is None:
+            sudo_user = os.environ.get("SUDO_USER")
+            home = f"~{sudo_user}" if sudo_user else "~"
+            base_dir = Path(f"{home}/.local/share/nixos-deploy/keys")
+        self._base_dir = base_dir.expanduser().resolve()
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def key_dir(self, hostname: str) -> Path:
