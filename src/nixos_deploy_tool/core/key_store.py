@@ -31,7 +31,7 @@ class KeyStore:
         privkey = self.privkey_path(hostname)
 
         subprocess.run(
-            ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", str(privkey)],
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", f"nixos-deploy/{hostname}", "-f", str(privkey)],
             check=True,
             capture_output=True,
             text=True,

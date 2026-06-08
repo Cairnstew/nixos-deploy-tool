@@ -88,7 +88,7 @@ def test_generate_invokes_ssh_keygen(mock_run, tmp_path: Path) -> None:
     ks.generate("desktop")
 
     mock_run.assert_called_with(
-        ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", str(tmp_path / "desktop" / "ssh_host_ed25519_key")],
+        ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "nixos-deploy/desktop", "-f", str(tmp_path / "desktop" / "ssh_host_ed25519_key")],
         check=True,
         capture_output=True,
         text=True,
