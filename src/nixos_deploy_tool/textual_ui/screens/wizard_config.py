@@ -5,7 +5,7 @@ import threading
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Input, Label, RadioSet, RadioButton, Static
+from textual.widgets import Button, Input, Label, RadioSet, RadioButton, Select, Static
 
 from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.base import BaseScreen
@@ -35,18 +35,32 @@ class WizardConfigScreen(BaseScreen):
                 placeholder=self._state.host_name,
                 id="addr-input",
             ),
-            Label("Disko mode:"),
-            RadioSet(
-                RadioButton("Auto-detect", id="mode-auto", value=True),
-                RadioButton("mount (existing partitions)", id="mode-mount"),
-                RadioButton("create (destructive)", id="mode-create"),
-                RadioButton("skip (no disko)", id="mode-skip"),
-                id="mode-select",
+            Label("Disk configuration:"),
+            Select(
+                options=[
+                    ("Use flake config", "flake"),
+                    ("Configure manually", "manual"),
+                    ("Skip disko", "skip"),
+                ],
+                value=self._state.config_source,
+                id="config-source-select",
             ),
-            Label("Extra arguments for nixos-anywhere:"),
-            Input(
-                placeholder="e.g. --phases kexec,install,reboot",
-                id="extra-args-input",
+            Static("", id="manual-coming-soon"),
+            Vertical(
+                Label("Disko mode:"),
+                RadioSet(
+                    RadioButton("Auto-detect", id="mode-auto", value=True),
+                    RadioButton("mount (existing partitions)", id="mode-mount"),
+                    RadioButton("create (destructive)", id="mode-create"),
+                    RadioButton("skip (no disko)", id="mode-skip"),
+                    id="mode-select",
+                ),
+                Label("Extra arguments for nixos-anywhere:"),
+                Input(
+                    placeholder="e.g. --phases kexec,install,reboot",
+                    id="extra-args-input",
+                ),
+                id="disko-flake-group",
             ),
             Horizontal(
                 Button("Validate Partitions & Deploy", id="validate-deploy", variant="primary"),
@@ -67,14 +81,12 @@ class WizardConfigScreen(BaseScreen):
             self.query_one("#addr-input", Input).focus()
         if self._state.extra_args:
             self.query_one("#extra-args-input", Input).value = self._state.extra_args
-        if self._state.disko_mode != "auto":
-            mode_to_id = {"mount": "mode-mount", "create": "mode-create", "skip": "mode-skip"}
-            button_id = mode_to_id.get(self._state.disko_mode)
-            if button_id:
-                self.query_one(f"#{button_id}", RadioButton).value = True
-        # Auto-advance when all config is pre-filled via CLI.
-        # Validation runs in a thread so the TUI renders in parallel.
-        if self._state.ssh_target and self._state.disko_mode != "auto":
+        self._apply_config_source()
+        # Auto-advance when all config is pre-filled via CLI
+        if self._state.ssh_target and self._state.config_source == "skip":
+            self._go_to_deploy()
+            return
+        if self._state.ssh_target and self._state.config_source == "flake" and self._state.disko_mode != "auto":
             self._auto_validate_and_deploy()
 
     def _update_disko_summary(self, msg: str) -> None:
@@ -84,10 +96,46 @@ class WizardConfigScreen(BaseScreen):
         summary = self._svc.get_disko_summary(self._state.host_name)
         self.app.call_from_thread(self._update_disko_summary, summary)
 
+    def _apply_config_source(self) -> None:
+        source = self._state.config_source
+        self.query_one("#disko-flake-group", Vertical).display = source == "flake"
+        self.query_one("#extra-args-input", Input).display = source == "flake"
+        msg = self.query_one("#manual-coming-soon", Static)
+        if source == "manual":
+            msg.update("Configure manually — coming soon")
+            msg.display = True
+        else:
+            msg.display = False
+        # Also update Select widget to match state
+        sel = self.query_one("#config-source-select", Select)
+        sel.value = source
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "config-source-select":
+            self._state.config_source = str(event.value)
+            self._apply_config_source()
+            # Auto-advance when all config is pre-filled via CLI
+            if self._state.ssh_target and self._state.config_source == "skip":
+                self._go_to_deploy()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         addr_input = self.query_one("#addr-input", Input)
         self._state.ssh_target = addr_input.value or self._state.host_name
         self._state.ssh_key = self._svc.resolve_ssh_key()
+        self._state.config_source = str(self.query_one("#config-source-select", Select).value)
+
+        if self._state.config_source == "skip":
+            self._state.disko_mode = "skip"
+            self._go_to_deploy()
+            return
+
+        if self._state.config_source == "manual":
+            self.query_one("#manual-coming-soon", Static).update(
+                "Configure manually — coming soon"
+            )
+            return
+
+        # Flake path — read disko mode from radio set
         extra_input = self.query_one("#extra-args-input", Input)
         self._state.extra_args = extra_input.value or None
         mode_select = self.query_one("#mode-select", RadioSet)
@@ -129,7 +177,6 @@ class WizardConfigScreen(BaseScreen):
                     self.app.call_from_thread(self._go_to_deploy)
                     return
 
-                # Build device summary and expected partition labels
                 summary_parts: list[str] = []
                 expected: list[str] = []
                 for disk_name, disk in devices.get("disk", {}).items():
@@ -162,11 +209,9 @@ class WizardConfigScreen(BaseScreen):
                     )
 
                 self._state.missing_partlabels = missing
-                # Route through disk selection for mount/create/auto modes
                 self._stashed_devices = devices
                 self.app.call_from_thread(self._push_disk_selection)
             else:
-                # "skip" mode — no disko validation, go straight to deploy
                 self.app.call_from_thread(self._go_to_deploy)
         except Exception as exc:
             self.app.call_from_thread(self._validation_error, str(exc))
@@ -192,6 +237,8 @@ class WizardConfigScreen(BaseScreen):
         self.app.push_screen(WizardDeployScreen(self._svc, self._state))
 
     def _auto_validate_and_deploy(self) -> None:
-        """Triggered when CLI flags pre-filled all required state."""
         self._state.ssh_key = self._svc.resolve_ssh_key()
-        self._validate_and_deploy()
+        if self._state.disko_mode == "skip":
+            self._go_to_deploy()
+        else:
+            self._validate_and_deploy()

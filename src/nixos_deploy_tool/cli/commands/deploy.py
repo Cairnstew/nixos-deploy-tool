@@ -116,8 +116,11 @@ def wizard(
         state_overrides["extra_args"] = extra_args
     if skip_disko:
         state_overrides["disko_mode"] = "skip"
+        state_overrides["config_source"] = "skip"
     elif disko_mode is not None:
         state_overrides["disko_mode"] = disko_mode
+        if disko_mode == "skip":
+            state_overrides["config_source"] = "skip"
     if create_partitions:
         state_overrides["create_partitions"] = True
     run_tui(context=ctx.obj, state_overrides=state_overrides)

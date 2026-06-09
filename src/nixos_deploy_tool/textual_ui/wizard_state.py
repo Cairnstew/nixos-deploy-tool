@@ -9,6 +9,7 @@ class WizardState:
     flake_attr: str = ""
     ssh_target: str = ""
     ssh_key: str | None = None
+    config_source: str = "flake"
     disko_mode: str = "auto"
     extra_args: str | None = None
     missing_partlabels: list[str] = field(default_factory=list)

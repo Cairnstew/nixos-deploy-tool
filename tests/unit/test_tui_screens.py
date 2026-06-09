@@ -4,6 +4,7 @@ import asyncio
 import json
 
 import pytest
+from textual.containers import Vertical
 from textual.widgets import Button, DataTable, Input, RadioSet, RichLog, Select, Static
 
 from nixos_deploy_tool.textual_ui.screens.main import MainScreen
@@ -261,6 +262,50 @@ async def test_wizard_config_state_collection(
         assert state.ssh_target == "root@10.0.0.5"
         assert state.disko_mode in ("mount", "auto", "skip", "create")
         assert state.ssh_key is None or isinstance(state.ssh_key, str)
+
+
+@pytest.mark.asyncio
+async def test_wizard_config_manual_stub(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Selecting 'Configure manually' shows coming-soon and doesn't crash."""
+    state = make_wizard_state()
+    async with ScreenHarness(
+        WizardConfigScreen(mock_deploy_service, state)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        sel = screen.query_one("#config-source-select", Select)
+        sel.value = "manual"
+        await pilot.pause()
+        assert state.config_source == "manual"
+        # Flake-specific widgets hidden
+        assert screen.query_one("#disko-flake-group", Vertical).display is False
+        assert screen.query_one("#extra-args-input", Input).display is False
+        # Coming-soon label visible
+        msg = screen.query_one("#manual-coming-soon", Static)
+        assert msg.display is True
+        assert "coming soon" in msg._Static__content.lower()
+
+
+@pytest.mark.asyncio
+async def test_wizard_config_skip_source(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Selecting 'Skip disko' + validate goes straight to deploy."""
+    state = make_wizard_state()
+    async with ScreenHarness(
+        WizardConfigScreen(mock_deploy_service, state)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        sel = screen.query_one("#config-source-select", Select)
+        sel.value = "skip"
+        await pilot.pause()
+        assert state.config_source == "skip"
+        _click_button(screen, "validate-deploy")
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, WizardDeployScreen)
 
 
 # ── WizardPartitionScreen ─────────────────────────────────────────

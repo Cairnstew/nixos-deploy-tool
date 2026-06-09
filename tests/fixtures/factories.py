@@ -24,6 +24,7 @@ def make_wizard_state(**overrides: object) -> WizardState:
         host_name="test-host",
         flake_attr="test-host",
         ssh_target="nixos@10.0.0.1",
+        config_source="flake",
     )
     defaults.update(overrides)
     return WizardState(**defaults)

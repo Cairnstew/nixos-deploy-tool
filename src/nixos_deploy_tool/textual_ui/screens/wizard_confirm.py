@@ -27,6 +27,7 @@ class WizardConfirmScreen(BaseScreen):
             Label("Deploy Confirmation", classes="title"),
             Static(f"Host: {self._state.host_name}", id="confirm-host"),
             Static(f"Target: {self._state.ssh_target}", id="confirm-target"),
+            Static(f"Config source: {self._state.config_source}", id="confirm-source"),
             Static(f"Disko mode: {self._state.disko_mode}", id="confirm-mode"),
             Static("", id="confirm-disko-layout"),
             Static(f"Partition status: {status}", id="confirm-status"),
