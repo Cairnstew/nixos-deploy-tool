@@ -27,12 +27,13 @@ class WizardPartitionScreen(BaseScreen):
         yield Vertical(
             Label("Partition Configuration", classes="title"),
             Static(
-                f"Choose which partitions to create on '{self._state.ssh_target}':",
+                f"Target: {self._state.ssh_target}",
                 id="intro",
             ),
             Vertical(id="part-choices-container"),
             Horizontal(
                 Button("Create Selected & Deploy", id="create-deploy", variant="primary"),
+                Button("Use Flake Layout", id="use-flake", variant="default"),
                 Button("Skip All & Deploy", id="skip-deploy", variant="default"),
                 Button("Back", id="back", variant="default"),
                 classes="button-row",
@@ -44,17 +45,26 @@ class WizardPartitionScreen(BaseScreen):
         self._loop = asyncio.get_running_loop()
         self.creation_done.clear()
         container = self.query_one("#part-choices-container", Vertical)
-        for label in self._state.missing_partlabels:
-            self._part_choices[label] = "create"
-            row = Horizontal(
-                Label(f"  {label}", classes="part-label"),
-                Select(
-                    options=[("Create", "create"), ("Skip", "skip")],
-                    value="create",
-                    id=f"part-{label}",
-                ),
+        if self._state.missing_partlabels:
+            for label in self._state.missing_partlabels:
+                self._part_choices[label] = "create"
+                row = Horizontal(
+                    Label(f"  {label}", classes="part-label"),
+                    Select(
+                        options=[("Create", "create"), ("Skip", "skip")],
+                        value="create",
+                        id=f"part-{label}",
+                    ),
+                )
+                await container.mount(row)
+        else:
+            await container.mount(
+                Static(
+                    "No partitions detected. "
+                    "Click 'Use Flake Layout' to load partitions from your flake config, "
+                    "or 'Skip All & Deploy' to proceed without creating partitions."
+                )
             )
-            await container.mount(row)
         if self._state.create_partitions:
             self._create_selected()
             return
@@ -68,6 +78,8 @@ class WizardPartitionScreen(BaseScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "create-deploy":
             self._create_selected()
+        elif event.button.id == "use-flake":
+            self._load_from_flake()
         elif event.button.id == "skip-deploy":
             self._go_to_deploy()
         elif event.button.id == "back":
@@ -128,6 +140,66 @@ class WizardPartitionScreen(BaseScreen):
         )
         self.app.call_from_thread(self._go_to_deploy)
         self._loop.call_soon_threadsafe(self.creation_done.set)
+
+    def _load_from_flake(self) -> None:
+        """Load partition layout from flake in a background thread."""
+        if not self._state.disko_disk_overrides:
+            self.query_one("#status", Static).update("No target disk selected")
+            return
+        self.query_one("#status", Static).update("Evaluating flake disko config...")
+        self.query_one("#use-flake", Button).disabled = True
+        thread = threading.Thread(target=self._load_from_flake_thread, daemon=True)
+        thread.start()
+
+    def _load_from_flake_thread(self) -> None:
+        try:
+            devices_raw = self._svc.get_disko_devices(self._state.host_name)
+        except Exception:
+            self.app.call_from_thread(
+                self.query_one("#status", Static).update,
+                "Could not evaluate flake disko config",
+            )
+            self.app.call_from_thread(self._reenable_buttons)
+            return
+
+        disk_name = next(iter(self._state.disko_disk_overrides.keys()), "")
+        missing: list[str] = []
+        for name, disk in devices_raw.get("disk", {}).items():
+            if disk_name and name != disk_name:
+                continue
+            for part in (disk.get("content", {}).get("partitions", []) or []):
+                pname = part.get("name", "")
+                label = f"disk-{name}-{pname}"
+                missing.append(label)
+
+        if not missing:
+            self.app.call_from_thread(
+                self.query_one("#status", Static).update,
+                "No partitions defined in flake config for this disk",
+            )
+            self.app.call_from_thread(self._reenable_buttons)
+            return
+
+        self._state.missing_partlabels = missing
+        self._part_choices = {lbl: "create" for lbl in missing}
+        self.app.call_from_thread(self._rebuild_partition_choices, missing)
+
+    def _rebuild_partition_choices(self, missing: list[str]) -> None:
+        container = self.query_one("#part-choices-container", Vertical)
+        container.remove_children()
+        for label in missing:
+            self._part_choices[label] = "create"
+            row = Horizontal(
+                Label(f"  {label}", classes="part-label"),
+                Select(
+                    options=[("Create", "create"), ("Skip", "skip")],
+                    value="create",
+                    id=f"part-{label}",
+                ),
+            )
+            container.mount(row)
+        self.query_one("#status", Static).update(f"Loaded {len(missing)} partition(s) from flake")
+        self.query_one("#use-flake", Button).disabled = False
 
     def _reenable_buttons(self) -> None:
         self.query_one("#create-deploy", Button).disabled = False

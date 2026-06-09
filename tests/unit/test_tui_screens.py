@@ -449,6 +449,45 @@ async def test_wizard_partitions_per_part_skip(
         )
 
 
+@pytest.mark.asyncio
+async def test_wizard_partitions_use_flake_layout(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Empty missing_partlabels shows Use Flake Layout button."""
+    state = make_wizard_state(missing_partlabels=[])
+    state.disko_disk_overrides = {"main": "/dev/sda"}
+    mock_deploy_service._nix._results[
+        'nixosConfigurations."test-host".config.disko.devices'
+    ] = json.dumps({
+        "disk": {
+            "main": {
+                "device": "/dev/sda",
+                "content": {
+                    "partitions": [
+                        {"name": "root", "content": {"format": "ext4"}},
+                        {"name": "boot", "content": {"format": "vfat"}},
+                    ],
+                },
+            },
+        },
+    })
+
+    async with ScreenHarness(
+        WizardPartitionScreen(mock_deploy_service, state)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        # Should show the Use Flake Layout button
+        assert screen.query_one("#use-flake", Button).display is not False
+        _click_button(screen, "use-flake")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        # After loading, should show partition choices
+        container = screen.query_one("#part-choices-container", Vertical)
+        selects = container.query(Select)
+        assert len(selects) == 2
+
+
 # ── WizardDeployScreen ────────────────────────────────────────────
 
 

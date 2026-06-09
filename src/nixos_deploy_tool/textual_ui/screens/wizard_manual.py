@@ -175,7 +175,9 @@ class WizardManualScreen(BaseScreen):
 
         self._state.disko_mode = "mount"
 
-        if self._state.missing_partlabels:
+        # Always go through partition screen for manual mode so user can
+        # create partitions even when missing_partlabels is empty
+        if self._state.missing_partlabels or self._state.config_source == "manual":
             self.app.push_screen(WizardPartitionScreen(self._svc, self._state))
         else:
             self.app.push_screen(WizardConfirmScreen(self._svc, self._state))
