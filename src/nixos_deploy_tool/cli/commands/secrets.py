@@ -4,17 +4,14 @@ import typer
 
 from nixos_deploy_tool.cli.commands.base import BaseCommand
 from nixos_deploy_tool.cli.context import AppContext
-from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult, SuccessResult
-from nixos_deploy_tool.services.secrets import SecretService
 
 app = typer.Typer()
 
 
 class SecretsListCommand(BaseCommand):
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = SecretService(cfg)
+        svc = self.ctx._get_secret_service()
         secrets = svc.list_secrets()
         for s in secrets:
             typer.echo(f"  {s}")
@@ -27,8 +24,7 @@ class SecretsDecryptCommand(BaseCommand):
         self.name = name
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = SecretService(cfg)
+        svc = self.ctx._get_secret_service()
         return svc.decrypt(self.name)
 
 
@@ -38,17 +34,13 @@ class SecretsInjectCommand(BaseCommand):
         self.iso_name = iso_name
 
     def run(self) -> BaseResult:
-        from nixos_deploy_tool.services.iso import ISOService
-
-        cfg = self.ctx.config or DeployConfig()
-        svc = ISOService(cfg)
+        svc = self.ctx._get_iso_service()
         return svc.inject_secrets(self.iso_name, [])
 
 
 class SecretsRekeyCommand(BaseCommand):
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = SecretService(cfg)
+        svc = self.ctx._get_secret_service()
         return svc.rekey()
 
 

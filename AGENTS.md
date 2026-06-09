@@ -66,6 +66,17 @@ nix build .#default
 6. **Adding Nix-specific overrides** — place them in `flake.nix` as an additional extension in
    `composeManyExtensions`. See `UV2NIX.md` > Overriding Packages for patterns.
 7. **Class hierarchy** — follow the class hierarchy in `STRUCTURE.md`. New commands inherit from
-   `BaseCommand`, new services inherit from `BaseService`, new screens inherit from screen bases.
+   `BaseCommand(ABC)`, new services inherit from `BaseService(ABC)`, new screens inherit from
+   `BaseScreen` / `ListScreen` / `DetailScreen`.
 8. **New features**: add one file per layer (e.g. `models/user.py` + `services/user.py` +
    `cli/commands/user.py`), not feature folders.
+9. **Abstract base classes**: Always use `ABC` + `@abstractmethod`, never `raise NotImplementedError`.
+10. **Dependency injection**: Services accept optional core instances in their constructor
+    (e.g., `DeployService(config, *, nixos_anywhere=None, flake=None, ...)`).
+    Default to inferring them from config. This enables testing without monkey-patching.
+11. **Services from AppContext**: CLI commands retrieve services via `self.ctx._get_deploy_service()`
+    (or `_get_iso_service`, `_get_tailscale_service`, etc.), never `Service(config)` directly.
+    TUI screens receive services via constructor injection from `DeployToolApp`.
+12. **TUI screen pattern**: All screens inherit from `BaseScreen` (or `ListScreen`/`DetailScreen`) and
+    accept `(svc: DeployService, state: WizardState)` in their constructor. Screens call public service
+    methods only — never `svc._private_method` or `svc._private_attr`.

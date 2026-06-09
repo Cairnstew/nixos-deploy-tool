@@ -4,9 +4,8 @@ import typer
 
 from nixos_deploy_tool.cli.commands.base import BaseCommand
 from nixos_deploy_tool.cli.context import AppContext
-from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult
-from nixos_deploy_tool.services.deploy import DeployService
+from nixos_deploy_tool.textual_ui.app import run_tui
 
 app = typer.Typer()
 
@@ -25,8 +24,7 @@ class DeployRunCommand(BaseCommand):
         self.extra_args = extra_args
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = DeployService(cfg)
+        svc = self.ctx._get_deploy_service()
         return svc.run(self.host, self.addr, self.extra_args)
 
 
@@ -44,8 +42,7 @@ class DeployWizardCommand(BaseCommand):
         self.extra_args = extra_args
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = DeployService(cfg)
+        svc = self.ctx._get_deploy_service()
         return svc.wizard(self.host, self.addr, self.extra_args)
 
 
@@ -63,8 +60,7 @@ class DeployWithKeysCommand(BaseCommand):
         self.extra_args = extra_args
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = DeployService(cfg)
+        svc = self.ctx._get_deploy_service()
         return svc.with_keys(self.host, self.addr, self.extra_args)
 
 
@@ -74,8 +70,7 @@ class DeployTestCommand(BaseCommand):
         self.host = host
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = DeployService(cfg)
+        svc = self.ctx._get_deploy_service()
         return svc.test(self.host)
 
 
@@ -107,9 +102,7 @@ def wizard(
         cmd = DeployWizardCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args)
         cmd.execute()
     else:
-        from nixos_deploy_tool.textual_ui.app import DeployToolApp
-        tui_app = DeployToolApp(context=ctx.obj)
-        tui_app.run()
+        run_tui(context=ctx.obj)
 
 
 @app.command(name="with-keys")

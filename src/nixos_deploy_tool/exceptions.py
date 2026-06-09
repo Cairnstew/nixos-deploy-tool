@@ -21,5 +21,17 @@ class TailscaleAPIError(NixosDeployError):
     """Raised when Tailscale API call fails."""
 
 
+class CoreError(NixosDeployError):
+    """Root for all core/infrastructure wrapper errors."""
+
+
+class SubprocessError(CoreError):
+    """Raised when a subprocess runner call fails."""
+
+
+class APIError(CoreError):
+    """Raised when an HTTP API client call fails."""
+
+
 class NixEvalError(NixosDeployError):
     """Raised when nix eval fails (e.g. attribute missing)."""

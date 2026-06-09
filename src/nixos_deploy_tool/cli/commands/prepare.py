@@ -4,9 +4,7 @@ import typer
 
 from nixos_deploy_tool.cli.commands.base import BaseCommand
 from nixos_deploy_tool.cli.context import AppContext
-from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult
-from nixos_deploy_tool.services.prepare import PrepareService
 
 app = typer.Typer()
 
@@ -17,8 +15,7 @@ class PrepareCommand(BaseCommand):
         self.host = host
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = PrepareService(cfg)
+        svc = self.ctx._get_prepare_service()
         return svc.prepare(self.host)
 
 

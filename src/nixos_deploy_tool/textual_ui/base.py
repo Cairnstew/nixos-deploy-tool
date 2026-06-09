@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from abc import abstractmethod
+
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.screen import Screen
@@ -22,17 +24,18 @@ class BaseScreen(Screen[None], LoggingMixin):
         yield from self.compose_content()
         yield Footer()
 
+    @abstractmethod
     def compose_content(self) -> ComposeResult:
-        return
-        yield
+        ...
 
 
 class ListScreen(BaseScreen, RefreshMixin, SelectionMixin):
     def compose_content(self) -> ComposeResult:
         yield DataTable()
 
+    @abstractmethod
     def load_rows(self) -> list[tuple[str, ...]]:
-        return []
+        ...
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
@@ -45,5 +48,6 @@ class DetailScreen(BaseScreen, NavigationMixin):
         yield Static("")
         yield VerticalScroll()
 
+    @abstractmethod
     def load_detail(self, key: str) -> str:
-        return ""
+        ...

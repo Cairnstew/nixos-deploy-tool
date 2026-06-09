@@ -7,7 +7,11 @@ from nixos_deploy_tool.services.base import BaseService
 
 
 class PrepareService(BaseService):
-    def __init__(self, config: DeployConfig, keystore: KeyStore | None = None) -> None:
+    def __init__(
+        self,
+        config: DeployConfig,
+        keystore: KeyStore | None = None,
+    ) -> None:
         super().__init__(config)
         self._keystore = keystore or KeyStore()
 

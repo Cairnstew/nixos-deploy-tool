@@ -4,9 +4,7 @@ import typer
 
 from nixos_deploy_tool.cli.commands.base import BaseCommand
 from nixos_deploy_tool.cli.context import AppContext
-from nixos_deploy_tool.models.config import DeployConfig
-from nixos_deploy_tool.models.result import BaseResult
-from nixos_deploy_tool.services.iso import ISOService
+from nixos_deploy_tool.models.result import BaseResult, SuccessResult
 
 app = typer.Typer()
 
@@ -17,20 +15,16 @@ class ISOBuildCommand(BaseCommand):
         self.name = name
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = ISOService(cfg)
+        svc = self.ctx._get_iso_service()
         return svc.build(self.name)
 
 
 class ISOListCommand(BaseCommand):
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = ISOService(cfg)
+        svc = self.ctx._get_iso_service()
         isos = svc.list_isos()
         for iso in isos:
             typer.echo(f"  {iso.name}")
-        from nixos_deploy_tool.models.result import SuccessResult
-
         return SuccessResult(message=f"Found {len(isos)} ISO(s).")
 
 
@@ -40,8 +34,7 @@ class ISORotateKeysCommand(BaseCommand):
         self.name = name
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = ISOService(cfg)
+        svc = self.ctx._get_iso_service()
         return svc.rotate_keys(self.name)
 
 
@@ -51,15 +44,12 @@ class ISOInfoCommand(BaseCommand):
         self.name = name
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = ISOService(cfg)
+        svc = self.ctx._get_iso_service()
         iso = svc.info(self.name)
         if iso:
             typer.echo(f"Name: {iso.name}")
             typer.echo(f"Flake attr: {iso.flake_attr}")
             typer.echo(f"System: {iso.system}")
-        from nixos_deploy_tool.models.result import SuccessResult
-
         return SuccessResult(message=f"Info for {self.name}.")
 
 

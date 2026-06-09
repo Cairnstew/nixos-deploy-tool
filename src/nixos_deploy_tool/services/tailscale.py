@@ -9,9 +9,13 @@ from nixos_deploy_tool.services.base import BaseService
 
 
 class TailscaleService(BaseService):
-    def __init__(self, config: DeployConfig) -> None:
+    def __init__(
+        self,
+        config: DeployConfig,
+        client: TailscaleAPIClient | None = None,
+    ) -> None:
         super().__init__(config)
-        self._client: TailscaleAPIClient | None = None
+        self._client = client
 
     def _have_credentials(self) -> bool:
         oauth = self.config.tailscale.oauth

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nixos_deploy_tool.core.age import AgeWrapper
+from nixos_deploy_tool.core.age import AgeRunner
 from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult, ErrorResult, SuccessResult
 from nixos_deploy_tool.repositories.agenix_catalog import AgenixCatalog
@@ -10,11 +10,16 @@ from nixos_deploy_tool.services.base import BaseService
 
 
 class SecretService(BaseService):
-    def __init__(self, config: DeployConfig) -> None:
+    def __init__(
+        self,
+        config: DeployConfig,
+        catalog: AgenixCatalog | None = None,
+        age: AgeRunner | None = None,
+    ) -> None:
         super().__init__(config)
         flake_root = Path(config.flake_root) if config.flake_root else Path.cwd()
-        self._catalog = AgenixCatalog(flake_root, config.secrets_dir)
-        self._age = AgeWrapper(age_bin=config.paths.age_bin or "age")
+        self._catalog = catalog or AgenixCatalog(flake_root, config.secrets_dir)
+        self._age = age or AgeRunner(age_bin=config.paths.age_bin or "age")
 
     def list_secrets(self) -> list[dict[str, object]]:
         try:

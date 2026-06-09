@@ -4,7 +4,9 @@ from textual.app import App
 from textual.screen import Screen
 
 from nixos_deploy_tool.cli.context import AppContext
+from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.screens.wizard_host import WizardHostScreen
+from nixos_deploy_tool.textual_ui.wizard_state import WizardState
 
 
 class DeployToolApp(App[Screen[None]]):
@@ -14,7 +16,19 @@ class DeployToolApp(App[Screen[None]]):
 
     def __init__(self, context: AppContext | None = None) -> None:
         super().__init__()
+        if context is None or context.config is None or not context.config.flake_root:
+            raise RuntimeError(
+                "DeployToolApp requires an AppContext with config.flake_root set. "
+                "Call: DeployToolApp(context=AppContext(config=DeployConfig(...)))"
+            )
         self.context = context
+        self._svc = context._get_deploy_service()
+        self._state = WizardState()
 
     def on_mount(self) -> None:
-        self.push_screen("wizard_host")
+        self.push_screen(WizardHostScreen(self._svc, self._state))
+
+
+def run_tui(context: AppContext | None = None) -> None:
+    app = DeployToolApp(context=context)
+    app.run()

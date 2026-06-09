@@ -4,9 +4,7 @@ import typer
 
 from nixos_deploy_tool.cli.commands.base import BaseCommand
 from nixos_deploy_tool.cli.context import AppContext
-from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult, SuccessResult
-from nixos_deploy_tool.services.tailscale import TailscaleService
 
 app = typer.Typer()
 auth_key_app = typer.Typer()
@@ -19,15 +17,13 @@ class AuthKeyCreateCommand(BaseCommand):
         self.ephemeral = ephemeral
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = TailscaleService(cfg)
+        svc = self.ctx._get_tailscale_service()
         return svc.create_auth_key(description=self.description, ephemeral=self.ephemeral)
 
 
 class AuthKeyListCommand(BaseCommand):
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = TailscaleService(cfg)
+        svc = self.ctx._get_tailscale_service()
         keys = svc.list_auth_keys()
         for k in keys:
             typer.echo(f"  {k.id}  {k.description}  expires={k.expires}")
@@ -40,15 +36,13 @@ class AuthKeyRevokeCommand(BaseCommand):
         self.key_id = key_id
 
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = TailscaleService(cfg)
+        svc = self.ctx._get_tailscale_service()
         return svc.revoke_auth_key(self.key_id)
 
 
 class StatusCommand(BaseCommand):
     def run(self) -> BaseResult:
-        cfg = self.ctx.config or DeployConfig()
-        svc = TailscaleService(cfg)
+        svc = self.ctx._get_tailscale_service()
         return svc.status()
 
 

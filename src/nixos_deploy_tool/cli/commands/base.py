@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+
 import typer
 
 from nixos_deploy_tool.cli.context import AppContext
@@ -7,12 +9,13 @@ from nixos_deploy_tool.exceptions import NixosDeployError
 from nixos_deploy_tool.models.result import BaseResult
 
 
-class BaseCommand:
+class BaseCommand(ABC):
     def __init__(self, ctx: AppContext) -> None:
         self.ctx = ctx
 
+    @abstractmethod
     def run(self) -> BaseResult:
-        raise NotImplementedError
+        ...
 
     def execute(self) -> None:
         try:

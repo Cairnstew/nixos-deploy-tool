@@ -150,14 +150,25 @@ BaseResult (pydantic.BaseModel)
 # ── CLI context (src/nixos_deploy_tool/cli/) ──────────────────────────────
 
 AppContext (dataclass)
-  # fields: verbose, flake_root, config (DeployConfig), services (dict)
+  # fields: verbose, flake_root, config (DeployConfig)
+  # methods: _get_deploy_service(), _get_iso_service(), etc. (lazy init)
+
+# ── Abstract base classes (ABCs) ──────────────────────────────────────────
+
+ABC
+  ├── BaseCommand          # run() -> BaseResult [abstract], execute() [template]
+  ├── BaseService          # config, logger; on_start(), on_stop() [hooks]
+  ├── BaseRepository       # list(), get() [abstract]
+  ├── SubprocessRunner     # _run() [shared impl], _wrap_error() [abstract]
+  └── APIClient             # _get/_post/_delete [shared impl], _auth_headers() [abstract]
 
 # ── CLI commands (src/nixos_deploy_tool/cli/commands/) ────────────────────
 
-BaseCommand
-  ├── method: run() -> BaseResult
-  ├── method: handle_result(r: BaseResult) -> None
-  └── method: abort(msg: str) -> None
+BaseCommand(ABC)
+  ├── run() -> BaseResult                    [@abstractmethod]
+  ├── execute() -> None                      [template — calls run(), catch, handle_result]
+  ├── handle_result(r: BaseResult) -> None   [concrete — prints or exits]
+  └── abort(msg: str) -> None               [concrete — red message + typer.Exit(1)]
       ├── ISOBuildCommand(BaseCommand)
       ├── ISOListCommand(BaseCommand)
       ├── ISORotateKeysCommand(BaseCommand)
@@ -180,35 +191,90 @@ BaseCommand
 LoggingMixin, RefreshMixin, SelectionMixin, NavigationMixin
 
 BaseScreen(Screen, LoggingMixin)
+  compose_content() -> ComposeResult       [@abstractmethod]
   ├── ListScreen(BaseScreen, RefreshMixin, SelectionMixin)
+  │     load_rows() -> list[tuple[...]]    [@abstractmethod]
   └── DetailScreen(BaseScreen, NavigationMixin)
+        load_detail(key) -> str            [@abstractmethod]
 
 DeployToolApp(App)
-  # SCREENS: {"main": MainScreen}
+  # Creates services once via AppContext, injects into all screens
+  # WizardState flows as mutable singleton through screen constructors
+
+# ── TUI screens (src/nixos_deploy_tool/textual_ui/screens/) ──────────────
+
+BaseScreen
+  ├── MainScreen(BaseScreen)               # Dashboard
+  ├── WizardHostScreen(ListScreen)         # Host selection via DataTable
+  ├── WizardConfigScreen(BaseScreen)       # Config + partition validation
+  ├── WizardPartitionScreen(BaseScreen)    # Partition creation
+  └── WizardDeployScreen(BaseScreen)       # Streaming deploy output
 
 # ── Services (src/nixos_deploy_tool/services/) ────────────────────────────
 
-BaseService
+BaseService(ABC)
   ├── ISOService(BaseService)
-  ├── DeployService(BaseService)
+  ├── DeployService(BaseService)           # + list_hosts, get_disko_devices, run_streaming
   ├── TailscaleService(BaseService)
   └── SecretService(BaseService)
 
 # ── Core (src/nixos_deploy_tool/core/) ────────────────────────────────────
 
-AgeWrapper, FlakeIntrospector, NixRunner, NixosAnywhere, TailscaleAPIClient, ISOBuilder
+SubprocessRunner(ABC)        [core/_base.py]
+  ├── NixRunner              [core/nix.py]
+  ├── AgeRunner              [core/age.py]          (was AgeWrapper)
+  ├── ISOBuilder             [core/iso_builder.py]
+  ├── NixosAnywhere          [core/nixos_anywhere.py]
+  └── SshClient               [core/ssh.py]
+
+APIClient(ABC)               [core/_base.py]
+  └── TailscaleAPIClient     [core/tailscale_api.py]
+
+Standalone:
+  ├── FlakeIntrospector      [core/flake.py]
+  └── KeyStore               [core/key_store.py]
 
 # ── Repositories (src/nixos_deploy_tool/repositories/) ────────────────────
 
-FlakeRepo, AgenixCatalog
+BaseRepository(ABC)
+  └── AgenixCatalog(BaseRepository)
 
 # ── Exceptions (src/nixos_deploy_tool/exceptions.py) ──────────────────────
 
 NixosDeployError(Exception)
-  ├── ISOBuildError(NixosDeployError)
-  ├── DeployRuntimeError(NixosDeployError)
-  ├── SecretError(NixosDeployError)
-  └── TailscaleAPIError(NixosDeployError)
+  ├── CoreError(NixosDeployError)
+  │     ├── SubprocessError(CoreError)
+  │     │     ├── NixEvalError(SubprocessError)
+  │     │     ├── ISOBuildError(SubprocessError)
+  │     │     ├── DeployRuntimeError(SubprocessError)
+  │     │     └── SecretError(SubprocessError)
+  │     └── APIError(CoreError)
+  │           └── TailscaleAPIError(APIError)
+```
+
+## Dependency Injection
+
+Services accept optional core instances in their constructor.
+CLI commands retrieve services via AppContext._get_*_service() (lazy init, cached).
+TUI screens receive services + WizardState via constructor injection from DeployToolApp.
+
+```
+CLI callback → creates AppContext(config)
+                        │
+              ┌─────────┴──────────┐
+              ▼                    ▼
+        CLI command             TUI App
+        ctx._get_service()     DeployToolApp(context)
+              │                    │
+              ▼                    ├── AppContext._get_deploy_service()
+         DeployService             └── WizardHostScreen(svc, state)
+              │                          │
+         Services use                   ├── WizardConfigScreen(svc, state)
+         DI for core deps               ├── WizardPartitionScreen(svc, state)
+              │                          └── WizardDeployScreen(svc, state)
+              ▼
+         Core classes use
+         SubprocessRunner / APIClient
 ```
 
 ## Architecture

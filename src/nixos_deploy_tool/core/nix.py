@@ -1,44 +1,49 @@
 from __future__ import annotations
 
-import logging
-import subprocess
 from pathlib import Path
+from typing import Any
 
-from nixos_deploy_tool.exceptions import NixEvalError
+from nixos_deploy_tool.core._base import SubprocessRunner
+from nixos_deploy_tool.exceptions import NixEvalError, SubprocessError
 
 
-class NixRunner:
+class NixRunner(SubprocessRunner):
     def __init__(self) -> None:
-        self._logger = logging.getLogger(self.__class__.__name__)
+        super().__init__("nix")
 
-    def build(self, attr: str, flake_root: Path, **kwargs: str) -> subprocess.CompletedProcess[str]:
-        cmd = ["nix", "build", f"{flake_root}#{attr}"]
+    def _wrap_error(self, exc: subprocess.CalledProcessError) -> Exception:  # type: ignore[name-defined]
+        import subprocess
+
+        return SubprocessError(
+            f"nix command failed (exit {exc.returncode}): {exc.stderr.strip()}"
+        )
+
+    def build(
+        self, attr: str, flake_root: Path, **kwargs: str
+    ) -> subprocess.CompletedProcess[str]:  # type: ignore[name-defined]
+        import subprocess
+
+        args = ["build", f"{flake_root}#{attr}"]
         for key, val in kwargs.items():
-            cmd.extend([f"--{key.replace('_', '-')}", val])
-        self._logger.info("Running: %s", " ".join(cmd))
+            args.extend([f"--{key.replace('_', '-')}", val])
+        self.logger.info("Running: nix %s", " ".join(args[1:]))
+        cmd = [self.binary, *args]
         result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, timeout=300)
         if result.returncode != 0:
-            raise RuntimeError(
+            raise SubprocessError(
                 f"`{' '.join(cmd)}` failed (exit {result.returncode})"
             )
         return result
 
     def eval_json(self, expr: str, flake_root: Path | None = None) -> str:
-        cmd = ["nix", "eval", "--json", "--expr", expr]
+        args = ["eval", "--json", "--expr", expr]
         if flake_root:
-            cmd.extend(["--option", "flake", str(flake_root)])
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
-            )
-        return result.stdout.strip()
+            args.extend(["--option", "flake", str(flake_root)])
+        return self._run(args, timeout=120)
 
     def eval_flake_json(self, attr: str, flake_root: Path) -> str:
-        cmd = ["nix", "eval", "--json", f"{flake_root}#{attr}"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode != 0:
-            raise NixEvalError(
-                f"Failed to eval '{attr}': {result.stderr.strip()}"
-            )
-        return result.stdout.strip()
+        args = ["eval", "--json", f"{flake_root}#{attr}"]
+        try:
+            return self._run(args, timeout=120)
+        except SubprocessError as exc:
+            raise NixEvalError(str(exc)) from exc

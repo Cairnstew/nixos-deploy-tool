@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nixos_deploy_tool.core.age import AgeWrapper
+from nixos_deploy_tool.core.age import AgeRunner
 from nixos_deploy_tool.core.flake import FlakeIntrospector
 from nixos_deploy_tool.core.iso_builder import ISOBuilder
 from nixos_deploy_tool.models.config import DeployConfig, ISOConfig, SecretInjection
@@ -11,13 +11,21 @@ from nixos_deploy_tool.services.base import BaseService
 
 
 class ISOService(BaseService):
-    def __init__(self, config: DeployConfig) -> None:
+    def __init__(
+        self,
+        config: DeployConfig,
+        builder: ISOBuilder | None = None,
+        flake: FlakeIntrospector | None = None,
+        age: AgeRunner | None = None,
+    ) -> None:
         super().__init__(config)
-        flake_root = Path(config.flake_root) if config.flake_root else Path.cwd()
+        if not config.flake_root:
+            raise RuntimeError("ISOService: DeployConfig.flake_root must be set")
+        flake_root = Path(config.flake_root)
         self._flake_root = flake_root
-        self._builder = ISOBuilder(nix_bin=config.paths.nixos_anywhere_bin or "nix")
-        self._flake = FlakeIntrospector(flake_root)
-        self._age = AgeWrapper(age_bin=config.paths.age_bin or "age")
+        self._builder = builder or ISOBuilder(nix_bin=config.paths.nixos_anywhere_bin or "nix")
+        self._flake = flake or FlakeIntrospector(flake_root)
+        self._age = age or AgeRunner(age_bin=config.paths.age_bin or "age")
 
     def list_isos(self) -> list[ISOConfig]:
         raw = self._flake.list_iso_configs()

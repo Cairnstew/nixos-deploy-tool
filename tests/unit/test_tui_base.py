@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from textual.screen import Screen
 
 from nixos_deploy_tool.textual_ui.base import BaseScreen, ListScreen, DetailScreen
@@ -40,8 +41,13 @@ def test_load_rows_hook_overridable() -> None:
     assert instance.load_rows() == [("a", "b")]
 
 
-def test_base_load_rows_returns_empty() -> None:
-    assert ListScreen.load_rows(None) == []  # type: ignore[arg-type]
+def test_base_load_rows_returns_none() -> None:
+    """Calling load_rows on a bare subclass returns None (no-op default)."""
+    class BareList(ListScreen):
+        def load_rows(self) -> list[tuple[str, ...]]:
+            return super().load_rows()
+    instance = BareList()
+    assert instance.load_rows() is None
 
 
 def test_logging_mixin_exists() -> None:

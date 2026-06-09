@@ -35,3 +35,7 @@ class FlakeIntrospector:
         for key in data.get("nixosConfigurations", {}):
             hosts.append({"name": key, "attr": key})
         return hosts
+
+    def discover_hosts(self) -> list[str]:
+        """Return flat list of host names (convenience wrapper)."""
+        return [h["name"] for h in self.list_host_configs()]
