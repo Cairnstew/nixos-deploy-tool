@@ -12,3 +12,4 @@ class WizardState:
     disko_mode: str = "auto"
     extra_args: str | None = None
     missing_partlabels: list[str] = field(default_factory=list)
+    disko_device_summary: str = ""

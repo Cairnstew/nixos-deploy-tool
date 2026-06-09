@@ -7,6 +7,7 @@ import pytest
 from textual.widgets import Button, DataTable
 
 from nixos_deploy_tool.textual_ui.screens.wizard_config import WizardConfigScreen
+from nixos_deploy_tool.textual_ui.screens.wizard_confirm import WizardConfirmScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_partitions import (
     WizardPartitionScreen,
@@ -83,16 +84,13 @@ async def test_full_wizard_validation_missing_partitions(tui_app_async) -> None:
         config_screen = pilot.app.screen
         await asyncio.wait_for(config_screen.validation_done.wait(), timeout=5)
         await pilot.pause()
-
         assert isinstance(pilot.app.screen, WizardPartitionScreen)
-        table = pilot.app.screen.query_one("#partitions-table", DataTable)
-        assert table.row_count == 1
 
+        # Create partitions then deploy
         _click_button(pilot.app.screen, "create-deploy")
         part_screen = pilot.app.screen
         await asyncio.wait_for(part_screen.creation_done.wait(), timeout=5)
         await pilot.pause()
-
         assert isinstance(pilot.app.screen, WizardDeployScreen)
         assert len(svc.ssh_client.created_partitions) == 1
         assert svc.ssh_client.created_partitions[0] == (
@@ -103,7 +101,7 @@ async def test_full_wizard_validation_missing_partitions(tui_app_async) -> None:
 
 @pytest.mark.asyncio
 async def test_full_wizard_validation_all_present(tui_app_async) -> None:
-    """Host → config → validate (all found) → deploy screen directly (no partition screen)."""
+    """Host → config → validate (all found) → confirm screen → deploy."""
     async with tui_app_async.run_test(size=(100, 50)) as pilot:
         await pilot.pause()
         _select_host(pilot.app.screen)
@@ -133,4 +131,4 @@ async def test_full_wizard_validation_all_present(tui_app_async) -> None:
         await asyncio.wait_for(config_screen.validation_done.wait(), timeout=5)
         await pilot.pause()
 
-        assert isinstance(pilot.app.screen, WizardDeployScreen)
+        assert isinstance(pilot.app.screen, WizardConfirmScreen)

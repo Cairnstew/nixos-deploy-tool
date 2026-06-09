@@ -170,12 +170,10 @@ def test_build_extra_args_defaults_plus_skip_disko() -> None:
     assert result == ["--verbose", "--phases", "kexec,install,reboot"]
 
 
-def test_build_extra_args_skip_disko_logs_warning_when_conflicting() -> None:
+def test_build_extra_args_skip_disko_overrides_disko_mode() -> None:
     svc = DeployService(_cfg(skip_disko=True, disko_mode="mount"))
-    with patch.object(svc.logger, "debug") as mock_debug:
-        result = svc.build_extra_args("myhost", None)
+    result = svc.build_extra_args("myhost", None)
     assert result == ["--phases", "kexec,install,reboot"]
-    mock_debug.assert_any_call("skip_disko=true overrides disko_mode=%s", "mount")
 
 
 def test_build_extra_args_disko_mode_no_eval() -> None:

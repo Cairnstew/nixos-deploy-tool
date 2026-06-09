@@ -8,6 +8,7 @@ from textual.widgets import Button, DataTable, Input, RadioSet, RichLog, Static
 
 from nixos_deploy_tool.textual_ui.screens.main import MainScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_config import WizardConfigScreen
+from nixos_deploy_tool.textual_ui.screens.wizard_confirm import WizardConfirmScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_host import WizardHostScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_partitions import (
@@ -129,7 +130,7 @@ async def test_wizard_config_disko_summary(
         label = pilot.app.screen.query_one("#disko-summary", Static)
         text = label._Static__content
         assert isinstance(text, str)
-        assert "Disko devices" in text or "No disko devices" in text
+        assert "Disk:" in text or "Disks:" in text or "No disko devices" in text
 
 
 @pytest.mark.asyncio
@@ -163,7 +164,7 @@ async def test_wizard_config_validate_deploy_all_found(
         screen = pilot.app.screen
         await asyncio.wait_for(screen.validation_done.wait(), timeout=5)
         await pilot.pause()
-        assert isinstance(pilot.app.screen, WizardDeployScreen)
+        assert isinstance(pilot.app.screen, WizardConfirmScreen)
 
 
 @pytest.mark.asyncio

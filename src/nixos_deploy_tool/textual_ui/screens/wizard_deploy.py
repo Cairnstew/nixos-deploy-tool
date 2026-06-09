@@ -46,6 +46,7 @@ class WizardDeployScreen(BaseScreen):
             self._state.host_name,
             addr=self._state.ssh_target,
             extra_args=self._state.extra_args,
+            disko_mode=self._state.disko_mode,
             on_output=lambda line: self.app.call_from_thread(self._log.write, line),
             on_done=lambda result: self.app.call_from_thread(self._on_result, result),
         )

@@ -9,6 +9,7 @@ from textual.widgets import Button, Input, Label, RadioSet, RadioButton, Static
 
 from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.base import BaseScreen
+from nixos_deploy_tool.textual_ui.screens.wizard_confirm import WizardConfirmScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_partitions import WizardPartitionScreen
 from nixos_deploy_tool.textual_ui.wizard_state import WizardState
@@ -111,15 +112,21 @@ class WizardConfigScreen(BaseScreen):
                     self.app.call_from_thread(self._go_to_deploy)
                     return
 
-                ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
+                # Build device summary and expected partition labels
+                summary_parts: list[str] = []
                 expected: list[str] = []
                 for disk_name, disk in devices.get("disk", {}).items():
-                    partitions = disk.get("content", {}).get("partitions", []) or []
-                    for part in partitions:
-                        part_name = part.get("name", "")
+                    device = disk.get("device", "?")
+                    content = disk.get("content", {})
+                    part_names = DeployService._parse_partition_names(content)
+                    if part_names:
+                        summary_parts.append(f"  {device} ({disk_name})  →  {', '.join(part_names)}")
+                    for part_name in part_names:
                         if part_name:
                             expected.append(f"disk-{disk_name}-{part_name}")
+                self._state.disko_device_summary = "\n".join(summary_parts)
 
+                ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
                 for i, label in enumerate(expected):
                     self.app.call_from_thread(
                         self._set_status,
@@ -141,11 +148,14 @@ class WizardConfigScreen(BaseScreen):
                 if missing:
                     self.app.call_from_thread(self._push_partitions)
                 else:
-                    self.app.call_from_thread(self._go_to_deploy)
+                    self.app.call_from_thread(self._push_confirm)
         except Exception as exc:
             self.app.call_from_thread(self._validation_error, str(exc))
         finally:
             self._loop.call_soon_threadsafe(self.validation_done.set)
+
+    def _push_confirm(self) -> None:
+        self.app.push_screen(WizardConfirmScreen(self._svc, self._state))
 
     def _push_partitions(self) -> None:
         self.app.push_screen(WizardPartitionScreen(self._svc, self._state))

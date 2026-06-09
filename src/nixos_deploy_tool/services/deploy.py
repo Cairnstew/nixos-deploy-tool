@@ -60,12 +60,36 @@ class DeployService(BaseService):
         )
         return json.loads(raw)
 
+    @staticmethod
+    def _parse_partition_names(disk_content: dict) -> list[str]:
+        """Extract partition names from a disko content block.
+
+        Supports both dict-keyed (gpt) and list-style partitions.
+        """
+        partitions = disk_content.get("partitions") or {}
+        if isinstance(partitions, dict):
+            return [p.get("name", name) for name, p in partitions.items()]
+        return [p.get("name", "") for p in partitions if p.get("name")]
+
     def get_disko_summary(self, host_name: str) -> str:
         """Return a human-readable summary of the disko config."""
         try:
             devices = self.get_disko_devices(host_name)
-            count = len(devices.get("disk", {}))
-            return f"Disko devices: {count} disk(s) configured"
+            disk_dict = devices.get("disk", {})
+            if not disk_dict:
+                return "No disko devices found — partitions may be configured manually"
+            lines: list[str] = []
+            for name, disk in disk_dict.items():
+                device = disk.get("device", "?")
+                content = disk.get("content", {})
+                part_names = self._parse_partition_names(content)
+                if part_names:
+                    lines.append(f"  {device} ({name})  →  {', '.join(part_names)}")
+                else:
+                    lines.append(f"  {device} ({name})")
+            if len(lines) == 1:
+                return f"Disk: {lines[0].strip()}"
+            return "Disks:\n" + "\n".join(lines)
         except (NixEvalError, json.JSONDecodeError):
             return "No disko devices found — partitions may be configured manually"
 
@@ -122,14 +146,19 @@ class DeployService(BaseService):
         cli_extra_args: str | None,
         disko_mode: str = "auto",
     ) -> list[str]:
-        """Build the extra_args list for nixos-anywhere, respecting config flags.
+        """Build the extra_args list for nixos-anywhere.
 
-        The disko_mode parameter (auto / mount / create / skip) determines
-        which --disko-mode or --phases flag is appended.
+        The *disko_mode* parameter (``"auto"`` / ``"mount"`` / ``"create"`` / ``"skip"``)
+        comes from the TUI radio selection and takes precedence over
+        ``DeployConfig.disko_mode``.  Use ``"auto"`` (the default) to fall back
+        to the config file.
         """
         args: list[str] = list(self.config.default_extra_args)
 
-        if self.config.skip_disko or self.config.disko_mode or self.config.auto_detect_disko:
+        has_config_override = (
+            self.config.skip_disko or self.config.disko_mode or self.config.auto_detect_disko
+        )
+        if has_config_override:
             for flag in ("--phases", "--disko-mode"):
                 if flag in args:
                     self.logger.warning(
@@ -138,22 +167,14 @@ class DeployService(BaseService):
                         flag,
                     )
 
-        if self.config.skip_disko:
-            if self.config.disko_mode:
-                self.logger.debug(
-                    "skip_disko=true overrides disko_mode=%s", self.config.disko_mode
-                )
-            if self.config.auto_detect_disko:
-                self.logger.debug("skip_disko=true overrides auto_detect_disko=true")
+        # TUI selection takes precedence over config file
+        effective_disko_mode = disko_mode if disko_mode != "auto" else self.config.disko_mode
+
+        if self.config.skip_disko or effective_disko_mode == "skip":
             args.extend(["--phases", "kexec,install,reboot"])
 
-        elif self.config.disko_mode:
-            if self.config.auto_detect_disko:
-                self.logger.debug(
-                    "disko_mode=%s overrides auto_detect_disko=true",
-                    self.config.disko_mode,
-                )
-            args.extend(["--disko-mode", self.config.disko_mode])
+        elif effective_disko_mode:
+            args.extend(["--disko-mode", effective_disko_mode])
 
         elif self.config.auto_detect_disko:
             try:
@@ -231,12 +252,17 @@ class DeployService(BaseService):
         host: str,
         addr: str | None = None,
         extra_args: str | None = None,
+        disko_mode: str = "auto",
         *,
         on_output: Callable[[str], None] | None = None,
         on_done: Callable[[BaseResult], None] | None = None,
     ) -> BaseResult:
         """Deploy with streaming output. Calls on_output(line) per line
-        and on_done(result) when finished.  Returns the final result."""
+        and on_done(result) when finished.  Returns the final result.
+
+        *disko_mode* is passed through to :meth:`build_extra_args` so the
+        TUI radio selection is reflected in the nixos-anywhere flags.
+        """
         try:
             target = addr or host
             attr = self.resolve_host_attr(host)
@@ -246,7 +272,7 @@ class DeployService(BaseService):
                 flake_root=self._flake_root,
                 ssh_key=self.resolve_ssh_key(),
                 extra_files=self.resolve_extra_files(host),
-                extra_args=self.build_extra_args(host, extra_args),
+                extra_args=self.build_extra_args(host, extra_args, disko_mode=disko_mode),
                 on_output=on_output,
             )
             result: BaseResult = SuccessResult(message=f"Deployed {host}.")

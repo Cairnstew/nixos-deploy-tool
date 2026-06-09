@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+from textual.app import ComposeResult
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Button, Label, Static
+
+from nixos_deploy_tool.services.deploy import DeployService
+from nixos_deploy_tool.textual_ui.base import BaseScreen
+from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
+from nixos_deploy_tool.textual_ui.wizard_state import WizardState
+
+
+class WizardConfirmScreen(BaseScreen):
+    """Shows the resolved disk layout and asks for confirmation before deploying."""
+
+    CSS_PATH = "../styles/wizard.tcss"
+
+    def __init__(self, svc: DeployService, state: WizardState) -> None:
+        super().__init__()
+        self._svc = svc
+        self._state = state
+
+    def compose_content(self) -> ComposeResult:
+        missing = self._state.missing_partlabels
+        status = "All partitions found" if not missing else f"{len(missing)} partition(s) missing"
+        yield Vertical(
+            Label("Deploy Confirmation", classes="title"),
+            Static(f"Host: {self._state.host_name}", id="confirm-host"),
+            Static(f"Target: {self._state.ssh_target}", id="confirm-target"),
+            Static(f"Disko mode: {self._state.disko_mode}", id="confirm-mode"),
+            Static("", id="confirm-disko-layout"),
+            Static(f"Partition status: {status}", id="confirm-status"),
+            Horizontal(
+                Button("Deploy", id="deploy", variant="primary"),
+                Button("Back", id="back", variant="default"),
+                classes="button-row",
+            ),
+            classes="container",
+        )
+
+    async def on_mount(self) -> None:
+        layout = self.query_one("#confirm-disko-layout", Static)
+        if self._state.disko_device_summary:
+            layout.update(f"Disk layout:\n{self._state.disko_device_summary}")
+        else:
+            layout.update("No disko devices configured — deploying without disk management")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "deploy":
+            self.app.push_screen(WizardDeployScreen(self._svc, self._state))
+        elif event.button.id == "back":
+            self.app.pop_screen()
