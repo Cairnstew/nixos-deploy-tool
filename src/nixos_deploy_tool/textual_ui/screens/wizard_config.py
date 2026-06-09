@@ -12,6 +12,7 @@ from textual.widgets import Button, Footer, Header, Input, Label, RadioSet, Radi
 from nixos_deploy_tool.exceptions import NixEvalError
 from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.services.deploy import DeployService
+from nixos_deploy_tool.core.ssh import SshClient
 from nixos_deploy_tool.textual_ui.screens.wizard_partitions import WizardPartitionScreen
 from nixos_deploy_tool.textual_ui.wizard_state import WizardState
 
@@ -178,8 +179,6 @@ class WizardConfigScreen(Screen[None]):
             self.call_from_thread(self._go_to_deploy)
 
     def _push_partitions(self) -> None:
-from nixos_deploy_tool.core.ssh import SshClient
-from nixos_deploy_tool.textual_ui.screens.wizard_partitions import WizardPartitionScreen
         self.app.push_screen(WizardPartitionScreen(self.state))
 
     def _validation_error(self, msg: str) -> None:
