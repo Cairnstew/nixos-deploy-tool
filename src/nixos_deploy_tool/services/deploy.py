@@ -145,6 +145,7 @@ class DeployService(BaseService):
         host_name: str,
         cli_extra_args: str | None,
         disko_mode: str = "auto",
+        disk_overrides: dict[str, str] | None = None,
     ) -> list[str]:
         """Build the extra_args list for nixos-anywhere.
 
@@ -211,6 +212,11 @@ class DeployService(BaseService):
                     )
             args.extend(cli_flags)
 
+        # --- Disk device overrides -----------------------------------------------
+        if disk_overrides:
+            for name, device in disk_overrides.items():
+                args.extend(["--disk", name, device])
+
         if args:
             self.logger.info("nixos-anywhere extra args: %s", " ".join(args))
 
@@ -262,6 +268,7 @@ class DeployService(BaseService):
         addr: str | None = None,
         extra_args: str | None = None,
         disko_mode: str = "auto",
+        disk_overrides: dict[str, str] | None = None,
         *,
         on_output: Callable[[str], None] | None = None,
         on_done: Callable[[BaseResult], None] | None = None,
@@ -271,6 +278,7 @@ class DeployService(BaseService):
 
         *disko_mode* is passed through to :meth:`build_extra_args` so the
         TUI radio selection is reflected in the nixos-anywhere flags.
+        *disk_overrides* maps flake disk names to target device paths.
         """
         try:
             target = addr or host
@@ -281,7 +289,8 @@ class DeployService(BaseService):
                 flake_root=self._flake_root,
                 ssh_key=self.resolve_ssh_key(),
                 extra_files=self.resolve_extra_files(host),
-                extra_args=self.build_extra_args(host, extra_args, disko_mode=disko_mode),
+                extra_args=self.build_extra_args(host, extra_args, disko_mode=disko_mode,
+                                                  disk_overrides=disk_overrides),
                 on_output=on_output,
             )
             result: BaseResult = SuccessResult(message=f"Deployed {host}.")

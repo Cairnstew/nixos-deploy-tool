@@ -275,6 +275,16 @@ def test_build_extra_args_explicit_mode_ignores_config_auto_detect() -> None:
     assert result == ["--disko-mode", "mount"]
 
 
+def test_build_extra_args_disk_overrides() -> None:
+    svc = DeployService(_cfg())
+    result = svc.build_extra_args(
+        "myhost", None, disk_overrides={"main": "/dev/sdb", "cache": "/dev/nvme0n1"}
+    )
+    assert "--disk" in result
+    assert result[result.index("--disk") + 1] == "main"
+    assert result[result.index("--disk") + 2] == "/dev/sdb"
+
+
 def test_prepareservice_new_key() -> None:
     with patch("nixos_deploy_tool.services.prepare.KeyStore") as mock_keystore_cls:
         mock_ks = MagicMock()

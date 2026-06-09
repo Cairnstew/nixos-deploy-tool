@@ -11,6 +11,7 @@ from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.base import BaseScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_confirm import WizardConfirmScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
+from nixos_deploy_tool.textual_ui.screens.wizard_disks import WizardDiskScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_partitions import WizardPartitionScreen
 from nixos_deploy_tool.textual_ui.wizard_state import WizardState
 
@@ -23,6 +24,7 @@ class WizardConfigScreen(BaseScreen):
         self._svc = svc
         self._state = state
         self.validation_done = asyncio.Event()
+        self._stashed_devices: dict | None = None
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -160,10 +162,9 @@ class WizardConfigScreen(BaseScreen):
                     )
 
                 self._state.missing_partlabels = missing
-                if missing:
-                    self.app.call_from_thread(self._push_partitions)
-                else:
-                    self.app.call_from_thread(self._push_confirm)
+                # Route through disk selection for mount/create/auto modes
+                self._stashed_devices = devices
+                self.app.call_from_thread(self._push_disk_selection)
             else:
                 # "skip" mode — no disko validation, go straight to deploy
                 self.app.call_from_thread(self._go_to_deploy)
@@ -177,6 +178,10 @@ class WizardConfigScreen(BaseScreen):
 
     def _push_partitions(self) -> None:
         self.app.push_screen(WizardPartitionScreen(self._svc, self._state))
+
+    def _push_disk_selection(self) -> None:
+        devices = self._stashed_devices or {}
+        self.app.push_screen(WizardDiskScreen(self._svc, self._state, devices))
 
     def _validation_error(self, msg: str) -> None:
         self.query_one("#status", Static).update(f"Validation error: {msg}")

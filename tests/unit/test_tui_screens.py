@@ -4,12 +4,13 @@ import asyncio
 import json
 
 import pytest
-from textual.widgets import Button, DataTable, Input, RadioSet, RichLog, Static
+from textual.widgets import Button, DataTable, Input, RadioSet, RichLog, Select, Static
 
 from nixos_deploy_tool.textual_ui.screens.main import MainScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_config import WizardConfigScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_confirm import WizardConfirmScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
+from nixos_deploy_tool.textual_ui.screens.wizard_disks import WizardDiskScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_host import WizardHostScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_partitions import (
     WizardPartitionScreen,
@@ -164,7 +165,7 @@ async def test_wizard_config_validate_deploy_all_found(
         screen = pilot.app.screen
         await asyncio.wait_for(screen.validation_done.wait(), timeout=5)
         await pilot.pause()
-        assert isinstance(pilot.app.screen, WizardConfirmScreen)
+        assert isinstance(pilot.app.screen, WizardDiskScreen)
 
 
 @pytest.mark.asyncio
@@ -198,7 +199,7 @@ async def test_wizard_config_validate_deploy_missing(
         screen = pilot.app.screen
         await asyncio.wait_for(screen.validation_done.wait(), timeout=5)
         await pilot.pause()
-        assert isinstance(pilot.app.screen, WizardPartitionScreen)
+        assert isinstance(pilot.app.screen, WizardDiskScreen)
 
 
 @pytest.mark.asyncio
@@ -354,3 +355,112 @@ async def test_wizard_deploy_streaming(
         _click_button(pilot.app.screen, "back")
         await pilot.pause()
         assert len(pilot.app.screen_stack) == 1
+
+
+# ── WizardDiskScreen ──────────────────────────────────────────────
+
+_MOCK_FLAKE_DISKS = {
+    "disk": {
+        "main": {
+            "device": "/dev/sda",
+            "content": {
+                "partitions": [{"name": "root"}, {"name": "boot"}],
+            },
+        },
+    },
+}
+
+
+@pytest.mark.asyncio
+async def test_wizard_disk_composition(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Disk screen renders flake table, target table, and selectors."""
+    state = make_wizard_state()
+    async with ScreenHarness(
+        WizardDiskScreen(mock_deploy_service, state, _MOCK_FLAKE_DISKS)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
+        await pilot.pause()
+        # Flake disk table populated
+        flake_table = screen.query_one("#flake-disks-table", DataTable)
+        assert flake_table.row_count == 1
+        # Target disk table populated
+        target_table = screen.query_one("#target-disks-table", DataTable)
+        assert target_table.row_count == 2
+        # Selector rendered
+        assert screen.query_one("#disk-map-main", Select)
+        assert not screen.query_one("#continue", Button).disabled
+
+
+@pytest.mark.asyncio
+async def test_wizard_disk_ssh_failure(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """When list_disks raises, show error and disable continue."""
+    state = make_wizard_state()
+    original_list_disks = mock_deploy_service.ssh_client.list_disks
+
+    def raise_error() -> list[dict]:
+        msg = "Connection refused"
+        raise RuntimeError(msg)
+
+    mock_deploy_service.ssh_client.list_disks = raise_error
+    async with ScreenHarness(
+        WizardDiskScreen(mock_deploy_service, state, _MOCK_FLAKE_DISKS)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
+        await pilot.pause()
+        status = screen.query_one("#disk-status", Static)
+        assert "Error probing disks" in status._Static__content
+        assert screen.query_one("#continue", Button).disabled
+    mock_deploy_service.ssh_client.list_disks = original_list_disks
+
+
+@pytest.mark.asyncio
+async def test_wizard_disk_continue_to_confirm(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Select disk + all partitions present → pushes confirm screen."""
+    state = make_wizard_state()
+    async with ScreenHarness(
+        WizardDiskScreen(mock_deploy_service, state, _MOCK_FLAKE_DISKS)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
+        await pilot.pause()
+        sel = screen.query_one("#disk-map-main", Select)
+        sel.value = "/dev/sda"
+        await pilot.pause()
+        _click_button(screen, "continue")
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, WizardConfirmScreen)
+        assert state.disko_disk_overrides == {"main": "/dev/sda"}
+
+
+@pytest.mark.asyncio
+async def test_wizard_disk_continue_to_partitions(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Select disk + missing partitions → pushes partition screen."""
+    state = make_wizard_state()
+    state.missing_partlabels = ["disk-main-root"]
+    async with ScreenHarness(
+        WizardDiskScreen(mock_deploy_service, state, _MOCK_FLAKE_DISKS)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
+        await pilot.pause()
+        sel = screen.query_one("#disk-map-main", Select)
+        sel.value = "/dev/sda"
+        await pilot.pause()
+        _click_button(screen, "continue")
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, WizardPartitionScreen)
+        assert state.disko_disk_overrides == {"main": "/dev/sda"}

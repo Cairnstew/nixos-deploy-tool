@@ -30,6 +30,7 @@ class WizardConfirmScreen(BaseScreen):
             Static(f"Disko mode: {self._state.disko_mode}", id="confirm-mode"),
             Static("", id="confirm-disko-layout"),
             Static(f"Partition status: {status}", id="confirm-status"),
+            Static("", id="confirm-disk-map"),
             Horizontal(
                 Button("Deploy", id="deploy", variant="primary"),
                 Button("Back", id="back", variant="default"),
@@ -44,6 +45,16 @@ class WizardConfirmScreen(BaseScreen):
             layout.update(f"Disk layout:\n{self._state.disko_device_summary}")
         else:
             layout.update("No disko devices configured — deploying without disk management")
+
+        disk_map = self.query_one("#confirm-disk-map", Static)
+        if self._state.disko_disk_overrides:
+            mapping = "; ".join(
+                f"{name} → {dev}"
+                for name, dev in self._state.disko_disk_overrides.items()
+            )
+            disk_map.update(f"Disk mapping: {mapping}")
+        else:
+            disk_map.update("")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "deploy":

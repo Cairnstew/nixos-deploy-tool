@@ -48,10 +48,12 @@ class SshClient(SubprocessRunner):
         )
         return result.returncode == 0
 
-    def list_partitions(self) -> list[dict[str, object]]:
-        result = self.run("lsblk --json -o NAME,PATH,LABEL,PARTLABEL,TYPE")
-        data = json.loads(result.stdout)
-        return data.get("blockdevices", [])
+    def list_disks(self) -> list[dict[str, object]]:
+        result = self.run(
+            "lsblk --json -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,LABEL,PARTLABEL,MODEL"
+        )
+        all_devices = json.loads(result.stdout).get("blockdevices", [])
+        return [d for d in all_devices if d.get("type") == "disk"]
 
     def create_partition(self, device: str, label: str) -> None:
         self.run(
