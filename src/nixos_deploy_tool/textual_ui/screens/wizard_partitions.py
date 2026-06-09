@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import threading
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, DataTable, Label, Static
 
-from nixos_deploy_tool.core.ssh import SshClient
 from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.base import BaseScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
@@ -20,6 +20,7 @@ class WizardPartitionScreen(BaseScreen):
         super().__init__()
         self._svc = svc
         self._state = state
+        self.creation_done = asyncio.Event()
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -39,7 +40,9 @@ class WizardPartitionScreen(BaseScreen):
             Static("", id="status"),
         )
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        self.creation_done.clear()
         table = self.query_one("#partitions-table", DataTable)
         table.add_columns("Partition", "Status")
         for label in self._state.missing_partlabels:
@@ -66,14 +69,14 @@ class WizardPartitionScreen(BaseScreen):
         try:
             devices_raw = self._svc.get_disko_devices(self._state.host_name)
         except Exception:
-            self.call_from_thread(
+            self.app.call_from_thread(
                 self.query_one("#status", Static).update,
                 "Error: could not evaluate disko config",
             )
-            self.call_from_thread(self._reenable_buttons)
+            self.app.call_from_thread(self._reenable_buttons)
             return
 
-        ssh = SshClient(self._state.ssh_target, self._state.ssh_key)
+        ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
         for disk_name, disk in devices_raw.get("disk", {}).items():
             device = disk.get("device", "")
             partitions = disk.get("content", {}).get("partitions", []) or []
@@ -81,7 +84,7 @@ class WizardPartitionScreen(BaseScreen):
                 part_name = part.get("name", "")
                 label = f"disk-{disk_name}-{part_name}"
                 if label in self._state.missing_partlabels:
-                    self.call_from_thread(
+                    self.app.call_from_thread(
                         self.query_one("#status", Static).update,
                         f"Creating partition '{label}' on {device}...",
                     )
@@ -92,18 +95,19 @@ class WizardPartitionScreen(BaseScreen):
                         if part_path:
                             ssh.mkfs(part_path, fstype, label)
                     except RuntimeError as exc:
-                        self.call_from_thread(
+                        self.app.call_from_thread(
                             self.query_one("#status", Static).update,
                             f"Failed to create {label}: {exc}",
                         )
-                        self.call_from_thread(self._reenable_buttons)
+                        self.app.call_from_thread(self._reenable_buttons)
                         return
 
-        self.call_from_thread(
+        self.app.call_from_thread(
             self.query_one("#status", Static).update,
             "All partitions created successfully",
         )
-        self.call_from_thread(self._go_to_deploy)
+        self.app.call_from_thread(self._go_to_deploy)
+        self._loop.call_soon_threadsafe(self.creation_done.set)
 
     def _reenable_buttons(self) -> None:
         self.query_one("#create-deploy", Button).disabled = False

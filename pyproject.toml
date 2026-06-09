@@ -64,6 +64,7 @@ asyncio_mode = "auto"
 markers = [
     "nix: requires nix in PATH (skip with -m 'not nix')",
     "integration: CLI subprocess tests",
+    "tui: Textual TUI screen tests (requires textual)",
 ]
 testpaths = ["tests"]
 addopts = "-v"

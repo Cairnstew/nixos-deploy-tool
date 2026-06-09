@@ -6,6 +6,9 @@ import shlex
 from collections.abc import Callable
 from pathlib import Path
 
+from collections.abc import Callable
+
+from nixos_deploy_tool.core._base import SubprocessRunner
 from nixos_deploy_tool.core.flake import FlakeIntrospector
 from nixos_deploy_tool.core.key_store import KeyStore
 from nixos_deploy_tool.core.nix import NixRunner
@@ -25,6 +28,7 @@ class DeployService(BaseService):
         flake: FlakeIntrospector | None = None,
         nix_runner: NixRunner | None = None,
         key_store: KeyStore | None = None,
+        ssh_factory: Callable[[str, str | None], SubprocessRunner] | None = None,
     ) -> None:
         super().__init__(config)
         if not config.flake_root:
@@ -37,8 +41,12 @@ class DeployService(BaseService):
         self._flake = flake or FlakeIntrospector(flake_root)
         self._nix = nix_runner or NixRunner()
         self._key_store = key_store or KeyStore()
+        self._ssh_factory = ssh_factory or (lambda target, key: SshClient(target, key))
 
     # ── Public API ──────────────────────────────────────────────────
+
+    def create_ssh(self, target: str, ssh_key: str | None = None) -> SubprocessRunner:
+        return self._ssh_factory(target, ssh_key)
 
     def list_hosts(self) -> list[dict[str, str]]:
         """List available host configurations from the flake."""

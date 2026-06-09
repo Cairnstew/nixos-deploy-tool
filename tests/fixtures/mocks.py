@@ -7,8 +7,9 @@ from unittest.mock import MagicMock
 from nixos_deploy_tool.core._base import SubprocessRunner
 from nixos_deploy_tool.core.flake import FlakeIntrospector
 from nixos_deploy_tool.core.nix import NixRunner
-from nixos_deploy_tool.services.deploy import DeployService
 from fixtures.factories import make_deploy_config
+from fixtures.mock_ssh import MockSshClient
+from nixos_deploy_tool.services.deploy import DeployService
 
 
 class MockNixRunner(NixRunner):
@@ -74,14 +75,21 @@ class MockDeployService(DeployService):
 
     Useful in TUI tests where the screen needs a real DeployService
     but must never actually run nix, ssh, or nixos-anywhere.
+
+    ``self.ssh_client`` is a shared ``MockSshClient`` instance returned
+    by every ``create_ssh()`` call.  Configure it in tests::
+
+        svc.ssh_client.partition_exists_results = {"disk-root-root": False}
     """
 
     def __init__(self, config=None) -> None:
         cfg = config or make_deploy_config()
+        self.ssh_client = MockSshClient("nixos@fake-host")
         super().__init__(
             config=cfg,
             nixos_anywhere=MagicMock(),
             flake=MockFlakeIntrospector(),
             nix_runner=MockNixRunner(),
             key_store=MagicMock(),
+            ssh_factory=lambda target, key: self.ssh_client,
         )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import threading
 
 from textual.app import ComposeResult
@@ -20,7 +21,7 @@ class WizardDeployScreen(BaseScreen):
         super().__init__()
         self._svc = svc
         self._state = state
-        self._deploy_done = threading.Event()
+        self.deploy_done = asyncio.Event()
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -30,7 +31,9 @@ class WizardDeployScreen(BaseScreen):
             Button("Back to Dashboard", id="back", variant="primary", disabled=True),
         )
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        self.deploy_done.clear()
         self._log = self.query_one("#deploy-log", RichLog)
         self._run_deploy()
 
@@ -43,10 +46,10 @@ class WizardDeployScreen(BaseScreen):
             self._state.host_name,
             addr=self._state.ssh_target,
             extra_args=self._state.extra_args,
-            on_output=lambda line: self.call_from_thread(self._log.write, line),
-            on_done=lambda result: self.call_from_thread(self._on_result, result),
+            on_output=lambda line: self.app.call_from_thread(self._log.write, line),
+            on_done=lambda result: self.app.call_from_thread(self._on_result, result),
         )
-        self._deploy_done.set()
+        self._loop.call_soon_threadsafe(self.deploy_done.set)
 
     def _on_result(self, result: BaseResult) -> None:
         if result.ok:
@@ -58,5 +61,5 @@ class WizardDeployScreen(BaseScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "back":
             app = self.app
-            while app.screen_stack:
+            while len(app.screen_stack) > 1:
                 app.pop_screen()

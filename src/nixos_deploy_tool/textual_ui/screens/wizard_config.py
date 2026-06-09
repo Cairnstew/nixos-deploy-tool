@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import threading
 
 from textual.app import ComposeResult
@@ -20,6 +21,7 @@ class WizardConfigScreen(BaseScreen):
         super().__init__()
         self._svc = svc
         self._state = state
+        self.validation_done = asyncio.Event()
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -51,7 +53,9 @@ class WizardConfigScreen(BaseScreen):
             Static("", id="status"),
         )
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        self.validation_done.clear()
         threading.Thread(target=self._eval_disko_summary, daemon=True).start()
         self.query_one("#addr-input", Input).focus()
 
@@ -60,7 +64,7 @@ class WizardConfigScreen(BaseScreen):
 
     def _eval_disko_summary(self) -> None:
         summary = self._svc.get_disko_summary(self._state.host_name)
-        self.call_from_thread(self._update_disko_summary, summary)
+        self.app.call_from_thread(self._update_disko_summary, summary)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         addr_input = self.query_one("#addr-input", Input)
@@ -97,19 +101,17 @@ class WizardConfigScreen(BaseScreen):
         missing: list[str] = []
         try:
             if self._state.disko_mode in ("mount", "auto"):
-                self.call_from_thread(self._set_status, "Evaluating disko config...")
+                self.app.call_from_thread(self._set_status, "Evaluating disko config...")
                 try:
                     devices = self._svc.get_disko_devices(self._state.host_name)
                 except Exception:
-                    self.call_from_thread(
+                    self.app.call_from_thread(
                         self._set_status, "No disko devices found — skipping validation"
                     )
-                    self.call_from_thread(self._go_to_deploy)
+                    self.app.call_from_thread(self._go_to_deploy)
                     return
 
-                from nixos_deploy_tool.core.ssh import SshClient
-
-                ssh = SshClient(self._state.ssh_target, self._state.ssh_key)
+                ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
                 expected: list[str] = []
                 for disk_name, disk in devices.get("disk", {}).items():
                     partitions = disk.get("content", {}).get("partitions", []) or []
@@ -119,7 +121,7 @@ class WizardConfigScreen(BaseScreen):
                             expected.append(f"disk-{disk_name}-{part_name}")
 
                 for i, label in enumerate(expected):
-                    self.call_from_thread(
+                    self.app.call_from_thread(
                         self._set_status,
                         f"Checking partition {i + 1} of {len(expected)}: {label}...",
                     )
@@ -127,22 +129,23 @@ class WizardConfigScreen(BaseScreen):
                         missing.append(label)
 
                 if missing:
-                    self.call_from_thread(
+                    self.app.call_from_thread(
                         self._set_status, f"{len(missing)} partition(s) missing"
                     )
                 else:
-                    self.call_from_thread(
+                    self.app.call_from_thread(
                         self._set_status, f"All {len(expected)} partitions found"
                     )
-        except Exception as exc:
-            self.call_from_thread(self._validation_error, str(exc))
-            return
 
-        self._state.missing_partlabels = missing
-        if missing:
-            self.call_from_thread(self._push_partitions)
-        else:
-            self.call_from_thread(self._go_to_deploy)
+                self._state.missing_partlabels = missing
+                if missing:
+                    self.app.call_from_thread(self._push_partitions)
+                else:
+                    self.app.call_from_thread(self._go_to_deploy)
+        except Exception as exc:
+            self.app.call_from_thread(self._validation_error, str(exc))
+        finally:
+            self._loop.call_soon_threadsafe(self.validation_done.set)
 
     def _push_partitions(self) -> None:
         self.app.push_screen(WizardPartitionScreen(self._svc, self._state))
