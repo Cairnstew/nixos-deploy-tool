@@ -42,12 +42,14 @@ class WizardDeployScreen(BaseScreen):
         thread.start()
 
     def _deploy_thread(self) -> None:
+        disk_overrides = self._state.disko_disk_overrides or None
+        disko_mode = self._state.disko_mode
         self._svc.run_streaming(
             self._state.host_name,
             addr=self._state.ssh_target,
             extra_args=self._state.extra_args,
-            disko_mode=self._state.disko_mode,
-            disk_overrides=self._state.disko_disk_overrides or None,
+            disko_mode=disko_mode,
+            disk_overrides=disk_overrides,
             on_output=lambda line: self.app.call_from_thread(self._log.write, line),
             on_done=lambda result: self.app.call_from_thread(self._on_result, result),
         )

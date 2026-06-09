@@ -12,6 +12,7 @@ from nixos_deploy_tool.textual_ui.base import BaseScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_confirm import WizardConfirmScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_disks import WizardDiskScreen
+from nixos_deploy_tool.textual_ui.screens.wizard_manual import WizardManualScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_partitions import WizardPartitionScreen
 from nixos_deploy_tool.textual_ui.wizard_state import WizardState
 
@@ -88,6 +89,10 @@ class WizardConfigScreen(BaseScreen):
             return
         if self._state.ssh_target and self._state.config_source == "flake" and self._state.disko_mode != "auto":
             self._auto_validate_and_deploy()
+            return
+        if self._state.ssh_target and self._state.config_source == "manual":
+            self._validate_and_deploy()
+            return
 
     def _update_disko_summary(self, msg: str) -> None:
         self.query_one("#disko-summary", Static).update(msg)
@@ -101,12 +106,7 @@ class WizardConfigScreen(BaseScreen):
         self.query_one("#disko-flake-group", Vertical).display = source == "flake"
         self.query_one("#extra-args-input", Input).display = source == "flake"
         msg = self.query_one("#manual-coming-soon", Static)
-        if source == "manual":
-            msg.update("Configure manually — coming soon")
-            msg.display = True
-        else:
-            msg.display = False
-        # Also update Select widget to match state
+        msg.display = False
         sel = self.query_one("#config-source-select", Select)
         sel.value = source
 
@@ -130,9 +130,8 @@ class WizardConfigScreen(BaseScreen):
             return
 
         if self._state.config_source == "manual":
-            self.query_one("#manual-coming-soon", Static).update(
-                "Configure manually — coming soon"
-            )
+            self._stashed_devices = None
+            self._validate_and_deploy()
             return
 
         # Flake path — read disko mode from radio set
@@ -210,7 +209,10 @@ class WizardConfigScreen(BaseScreen):
 
                 self._state.missing_partlabels = missing
                 self._stashed_devices = devices
-                self.app.call_from_thread(self._push_disk_selection)
+                if self._state.config_source == "manual":
+                    self.app.call_from_thread(self._push_manual)
+                else:
+                    self.app.call_from_thread(self._push_disk_selection)
             else:
                 self.app.call_from_thread(self._go_to_deploy)
         except Exception as exc:
@@ -227,6 +229,10 @@ class WizardConfigScreen(BaseScreen):
     def _push_disk_selection(self) -> None:
         devices = self._stashed_devices or {}
         self.app.push_screen(WizardDiskScreen(self._svc, self._state, devices))
+
+    def _push_manual(self) -> None:
+        devices = self._stashed_devices or {}
+        self.app.push_screen(WizardManualScreen(self._svc, self._state, devices))
 
     def _validation_error(self, msg: str) -> None:
         self.query_one("#status", Static).update(f"Validation error: {msg}")

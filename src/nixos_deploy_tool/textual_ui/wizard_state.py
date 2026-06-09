@@ -16,3 +16,4 @@ class WizardState:
     disko_device_summary: str = ""
     create_partitions: bool = False
     disko_disk_overrides: dict[str, str] = field(default_factory=dict)
+    manual_disk_selection: str = ""

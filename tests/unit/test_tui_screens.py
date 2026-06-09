@@ -13,6 +13,7 @@ from nixos_deploy_tool.textual_ui.screens.wizard_confirm import WizardConfirmScr
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_disks import WizardDiskScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_host import WizardHostScreen
+from nixos_deploy_tool.textual_ui.screens.wizard_manual import WizardManualScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_partitions import (
     WizardPartitionScreen,
 )
@@ -265,10 +266,10 @@ async def test_wizard_config_state_collection(
 
 
 @pytest.mark.asyncio
-async def test_wizard_config_manual_stub(
+async def test_wizard_config_manual_route(
     mock_deploy_service: MockDeployService,
 ) -> None:
-    """Selecting 'Configure manually' shows coming-soon and doesn't crash."""
+    """Selecting 'Configure manually' + validate → pushes manual screen."""
     state = make_wizard_state()
     async with ScreenHarness(
         WizardConfigScreen(mock_deploy_service, state)
@@ -282,10 +283,15 @@ async def test_wizard_config_manual_stub(
         # Flake-specific widgets hidden
         assert screen.query_one("#disko-flake-group", Vertical).display is False
         assert screen.query_one("#extra-args-input", Input).display is False
-        # Coming-soon label visible
+        # "coming-soon" no longer shown — manual is now functional
         msg = screen.query_one("#manual-coming-soon", Static)
-        assert msg.display is True
-        assert "coming soon" in msg._Static__content.lower()
+        assert msg.display is False
+        # Click validate → routes to manual screen
+        _click_button(screen, "validate-deploy")
+        config_screen = pilot.app.screen
+        await asyncio.wait_for(config_screen.validation_done.wait(), timeout=5)
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, WizardManualScreen)
 
 
 @pytest.mark.asyncio
@@ -509,3 +515,72 @@ async def test_wizard_disk_continue_to_partitions(
         await pilot.pause()
         assert isinstance(pilot.app.screen, WizardPartitionScreen)
         assert state.disko_disk_overrides == {"main": "/dev/sda"}
+
+
+# ── WizardManualScreen ─────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_wizard_manual_composition(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Manual screen renders target disk table with lsblk data."""
+    state = make_wizard_state()
+    async with ScreenHarness(
+        WizardManualScreen(mock_deploy_service, state, _MOCK_FLAKE_DISKS)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
+        await pilot.pause()
+        assert screen.query_one("#target-disks-table", DataTable).row_count == 2
+        assert screen.query_one("#continue", Button).disabled is True
+
+
+@pytest.mark.asyncio
+async def test_wizard_manual_select_disk(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Selecting a disk shows planned layout and enables continue."""
+    state = make_wizard_state()
+    async with ScreenHarness(
+        WizardManualScreen(mock_deploy_service, state, _MOCK_FLAKE_DISKS)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
+        await pilot.pause()
+        # Click a row
+        table = screen.query_one("#target-disks-table", DataTable)
+        table.move_cursor(row=0, column=0)
+        table.action_select_cursor()
+        await pilot.pause()
+        assert state.manual_disk_selection == "/dev/sda"
+        assert not screen.query_one("#continue", Button).disabled
+        # Planned layout should show flake partitions
+        layout = screen.query_one("#planned-layout", Static)
+        assert "root" in layout._Static__content
+
+
+@pytest.mark.asyncio
+async def test_wizard_manual_ssh_failure(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """When SSH fails, show error and disable continue."""
+    state = make_wizard_state()
+    original = mock_deploy_service.ssh_client.list_disks
+
+    def raise_error() -> list[dict]:
+        raise RuntimeError("Connection refused")
+
+    mock_deploy_service.ssh_client.list_disks = raise_error
+    async with ScreenHarness(
+        WizardManualScreen(mock_deploy_service, state, _MOCK_FLAKE_DISKS)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
+        await pilot.pause()
+        assert "Error probing disks" in screen.query_one("#disk-status", Static)._Static__content
+        assert screen.query_one("#continue", Button).disabled
+    mock_deploy_service.ssh_client.list_disks = original
