@@ -39,6 +39,7 @@ class ListScreen(BaseScreen, RefreshMixin, SelectionMixin):
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
+        table.clear()
         for row in self.load_rows():
             table.add_row(*row)
 

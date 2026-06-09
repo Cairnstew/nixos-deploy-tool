@@ -14,7 +14,7 @@ class AgenixCatalog(BaseRepository):
     def __init__(self, flake_root: Path, secrets_dir: str = "secrets") -> None:
         self.flake_root = flake_root
         self.secrets_dir = flake_root / secrets_dir
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger = logging.getLogger(__name__)
 
     def list_age_files(self) -> list[Path]:
         if not self.secrets_dir.is_dir():

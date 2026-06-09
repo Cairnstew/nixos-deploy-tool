@@ -4,6 +4,7 @@ from textual.app import App
 from textual.screen import Screen
 
 from nixos_deploy_tool.cli.context import AppContext
+from nixos_deploy_tool.cli.logging import setup_logging
 from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.screens.wizard_host import WizardHostScreen
 from nixos_deploy_tool.textual_ui.wizard_state import WizardState
@@ -22,6 +23,7 @@ class DeployToolApp(App[Screen[None]]):
                 "Call: DeployToolApp(context=AppContext(config=DeployConfig(...)))"
             )
         self.context = context
+        setup_logging(context.config, verbose=context.verbose)
         self._svc = context._get_deploy_service()
         self._state = WizardState()
 

@@ -10,10 +10,11 @@ from typing import Any, cast
 class FlakeIntrospector:
     def __init__(self, flake_root: Path) -> None:
         self.flake_root = flake_root
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger = logging.getLogger(__name__)
 
     def show_json(self) -> dict[str, Any]:
         cmd = ["nix", "flake", "show", "--json", str(self.flake_root)]
+        self._logger.debug("Running: %s", " ".join(cmd))
         result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
         if result.returncode != 0:
             raise RuntimeError(
@@ -27,6 +28,7 @@ class FlakeIntrospector:
         for key, val in data.get("packages", {}).items():
             if "iso" in key.lower():
                 outputs.append({"name": key, "attr": key})
+        self._logger.info("Found %d ISO config(s)", len(outputs))
         return outputs
 
     def list_host_configs(self) -> list[dict[str, str]]:
@@ -34,6 +36,7 @@ class FlakeIntrospector:
         hosts: list[dict[str, str]] = []
         for key in data.get("nixosConfigurations", {}):
             hosts.append({"name": key, "attr": key})
+        self._logger.info("Found %d host config(s): %s", len(hosts), [h["name"] for h in hosts])
         return hosts
 
     def discover_hosts(self) -> list[str]:

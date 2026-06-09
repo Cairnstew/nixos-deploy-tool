@@ -18,7 +18,7 @@ class SubprocessRunner(ABC):
 
     def __init__(self, binary: str) -> None:
         self.binary = binary
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__module__)
 
     def _run(
         self,
@@ -93,7 +93,7 @@ class APIClient(ABC):
 
     def __init__(self, base_url: str = "") -> None:
         self.base_url = base_url
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__module__)
 
     @abstractmethod
     def _auth_headers(self) -> dict[str, str]:

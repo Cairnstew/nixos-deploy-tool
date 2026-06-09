@@ -14,7 +14,7 @@ class KeyStore:
             home = f"~{sudo_user}" if sudo_user else "~"
             base_dir = Path(f"{home}/.local/share/nixos-deploy/keys")
         self._base_dir = base_dir.expanduser().resolve()
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger = logging.getLogger(__name__)
 
     def key_dir(self, hostname: str) -> Path:
         return self._base_dir / hostname
@@ -26,7 +26,10 @@ class KeyStore:
         return self.key_dir(hostname) / "ssh_host_ed25519_key.pub"
 
     def exists(self, hostname: str) -> bool:
-        return self.privkey_path(hostname).exists()
+        path = self.privkey_path(hostname)
+        found = path.exists()
+        self._logger.debug("Host key for '%s' %s at %s", hostname, "found" if found else "not found", path)
+        return found
 
     def generate(self, hostname: str) -> tuple[Path, str]:
         kdir = self.key_dir(hostname)

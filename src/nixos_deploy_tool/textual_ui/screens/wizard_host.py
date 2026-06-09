@@ -30,8 +30,10 @@ class WizardHostScreen(ListScreen):
     def on_mount(self) -> None:
         table = self.query_one("#hosts-table", DataTable)
         table.add_columns("Host", "Flake Attribute")
-        super().on_mount()
         table.focus()
+        # ListScreen.on_mount() is called automatically by Textual's
+        # MRO dispatch — do NOT call super().on_mount() here or rows
+        # will be inserted twice (once by super(), once by the MRO walk).
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         table = self.query_one("#hosts-table", DataTable)

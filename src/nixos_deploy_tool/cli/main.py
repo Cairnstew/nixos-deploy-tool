@@ -13,6 +13,7 @@ from nixos_deploy_tool.cli.commands import (
 )
 from nixos_deploy_tool.cli.config_loader import load_config
 from nixos_deploy_tool.cli.context import AppContext
+from nixos_deploy_tool.cli.logging import setup_logging
 
 app = typer.Typer(no_args_is_help=True)
 app.add_typer(iso_app, name="iso")
@@ -49,3 +50,4 @@ def main(
         flake_root=resolved_root,
         config=config,
     )
+    setup_logging(config, verbose=verbose)
