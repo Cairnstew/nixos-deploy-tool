@@ -303,7 +303,14 @@ class DeployService(BaseService):
 
     # ── High-level operations ──────────────────────────────────────
 
-    def run(self, host: str, addr: str | None = None, extra_args: str | None = None) -> BaseResult:
+    def run(
+        self,
+        host: str,
+        addr: str | None = None,
+        extra_args: str | None = None,
+        disk_overrides: dict[str, str] | None = None,
+        disko_mode: str = "auto",
+    ) -> BaseResult:
         self.logger.info("Deploying to %s (addr=%s)", host, addr or "auto")
         try:
             target = addr or host
@@ -312,7 +319,8 @@ class DeployService(BaseService):
                 target=target,
                 flake_attr=attr,
                 flake_root=self._flake_root,
-                extra_args=self.build_extra_args(host, extra_args),
+                extra_args=self.build_extra_args(host, extra_args, disko_mode=disko_mode,
+                                                  disk_overrides=disk_overrides),
                 extra_files=self.resolve_extra_files(host),
             )
             return SuccessResult(message=f"Deployed {host}.")
@@ -334,7 +342,14 @@ class DeployService(BaseService):
         except Exception as exc:
             return ErrorResult(message=f"Wizard failed: {exc}")
 
-    def with_keys(self, host: str, addr: str | None = None, extra_args: str | None = None) -> BaseResult:
+    def with_keys(
+        self,
+        host: str,
+        addr: str | None = None,
+        extra_args: str | None = None,
+        disk_overrides: dict[str, str] | None = None,
+        disko_mode: str = "auto",
+    ) -> BaseResult:
         self.logger.info("Deploying with keys to %s (addr=%s)", host, addr or "auto")
         try:
             attr = self.resolve_host_attr(host)
@@ -345,7 +360,8 @@ class DeployService(BaseService):
                 flake_attr=attr,
                 flake_root=self._flake_root,
                 ssh_key=ssh_key,
-                extra_args=self.build_extra_args(host, extra_args),
+                extra_args=self.build_extra_args(host, extra_args, disko_mode=disko_mode,
+                                                  disk_overrides=disk_overrides),
                 extra_files=self.resolve_extra_files(host),
             )
             return SuccessResult(message=f"Deployed {host} with keys.")

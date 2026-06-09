@@ -25,6 +25,7 @@ class WizardConfirmScreen(BaseScreen):
         status = "All partitions found" if not missing else f"{len(missing)} partition(s) missing"
         yield Vertical(
             Label("Deploy Confirmation", classes="title"),
+            Static("", id="confirm-warning"),
             Static(f"Host: {self._state.host_name}", id="confirm-host"),
             Static(f"Target: {self._state.ssh_target}", id="confirm-target"),
             Static(f"Config source: {self._state.config_source}", id="confirm-source"),
@@ -41,6 +42,19 @@ class WizardConfirmScreen(BaseScreen):
         )
 
     async def on_mount(self) -> None:
+        warning = self.query_one("#confirm-warning", Static)
+        devices: list[str] = []
+        if self._state.disko_disk_overrides:
+            devices = list(self._state.disko_disk_overrides.values())
+        elif self._state.disko_device_summary:
+            import re
+            devices = re.findall(r"/dev/\S+", self._state.disko_device_summary)
+        if devices:
+            dev_list = ", ".join(devices)
+            warning.update(f"[bold $error]DATA LOSS WARNING:[/] The following device(s) will be modified: {dev_list}")
+        else:
+            warning.update("[bold $error]DATA LOSS WARNING:[/] This will run disko and may DESTROY DATA on the target device(s)")
+
         layout = self.query_one("#confirm-disko-layout", Static)
         if self._state.disko_device_summary:
             layout.update(f"Disk layout:\n{self._state.disko_device_summary}")

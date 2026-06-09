@@ -10,6 +10,36 @@ from nixos_deploy_tool.textual_ui.app import run_tui
 app = typer.Typer()
 
 
+def _parse_disk_overrides(disk_args: list[str]) -> dict[str, str]:
+    """Parse --disk name=dev pairs into a dict."""
+    overrides: dict[str, str] = {}
+    for item in disk_args:
+        if "=" not in item:
+            typer.echo(f"Warning: --disk '{item}' missing '=', expected name=device", err=True)
+            continue
+        name, _, device = item.partition("=")
+        overrides[name.strip()] = device.strip()
+    return overrides
+
+
+def _confirm_disks(svc: object, host_name: str, yes: bool) -> None:
+    """Show disko summary and prompt for confirmation before destructive deploy."""
+    from nixos_deploy_tool.services.deploy import DeployService
+
+    svc_typed = svc  # keep type checker happy
+    if not isinstance(svc_typed, DeployService):
+        return
+    try:
+        summary = svc_typed.get_disko_summary(host_name)
+        if summary and "No disko devices" not in summary:
+            typer.echo(f"\nDisko configuration for {host_name}:")
+            typer.echo(f"  {summary}")
+    except Exception:
+        typer.echo("(could not evaluate disko config to display target devices)")
+    if not yes:
+        typer.confirm("This may DESTROY DATA on the target device(s). Proceed?", abort=True)
+
+
 class DeployRunCommand(BaseCommand):
     def __init__(
         self,
@@ -17,15 +47,23 @@ class DeployRunCommand(BaseCommand):
         host: str = "",
         addr: str | None = None,
         extra_args: str | None = None,
+        disk_overrides: dict[str, str] | None = None,
+        disko_mode: str = "auto",
+        yes: bool = False,
     ) -> None:
         super().__init__(ctx)
         self.host = host
         self.addr = addr
         self.extra_args = extra_args
+        self.disk_overrides = disk_overrides
+        self.disko_mode = disko_mode
+        self.yes = yes
 
     def run(self) -> BaseResult:
         svc = self.ctx._get_deploy_service()
-        return svc.run(self.host, self.addr, self.extra_args)
+        _confirm_disks(svc, self.host, self.yes)
+        return svc.run(self.host, self.addr, self.extra_args,
+                       disk_overrides=self.disk_overrides, disko_mode=self.disko_mode)
 
 
 class DeployWizardCommand(BaseCommand):
@@ -53,15 +91,23 @@ class DeployWithKeysCommand(BaseCommand):
         host: str = "",
         addr: str | None = None,
         extra_args: str | None = None,
+        disk_overrides: dict[str, str] | None = None,
+        disko_mode: str = "auto",
+        yes: bool = False,
     ) -> None:
         super().__init__(ctx)
         self.host = host
         self.addr = addr
         self.extra_args = extra_args
+        self.disk_overrides = disk_overrides
+        self.disko_mode = disko_mode
+        self.yes = yes
 
     def run(self) -> BaseResult:
         svc = self.ctx._get_deploy_service()
-        return svc.with_keys(self.host, self.addr, self.extra_args)
+        _confirm_disks(svc, self.host, self.yes)
+        return svc.with_keys(self.host, self.addr, self.extra_args,
+                             disk_overrides=self.disk_overrides, disko_mode=self.disko_mode)
 
 
 class DeployTestCommand(BaseCommand):
@@ -82,8 +128,20 @@ def run(
     extra_args: str | None = typer.Option(
         None, "--extra-args", help="Extra arguments forwarded to nixos-anywhere"
     ),
+    disk: list[str] = typer.Option(
+        [], "--disk", help="Map flake disk to device: --disk main=/dev/sda (repeatable)"
+    ),
+    disko_mode: str | None = typer.Option(
+        None, "--disko-mode", help="Disko mode: auto, mount, create, skip"
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip confirmation prompt"
+    ),
 ) -> None:
-    cmd = DeployRunCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args)
+    disk_overrides = _parse_disk_overrides(disk)
+    dm = disko_mode or "auto"
+    cmd = DeployRunCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args,
+                           disk_overrides=disk_overrides, disko_mode=dm, yes=yes)
     cmd.execute()
 
 
@@ -134,8 +192,20 @@ def with_keys(
     extra_args: str | None = typer.Option(
         None, "--extra-args", help="Extra arguments forwarded to nixos-anywhere"
     ),
+    disk: list[str] = typer.Option(
+        [], "--disk", help="Map flake disk to device: --disk main=/dev/sda (repeatable)"
+    ),
+    disko_mode: str | None = typer.Option(
+        None, "--disko-mode", help="Disko mode: auto, mount, create, skip"
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip confirmation prompt"
+    ),
 ) -> None:
-    cmd = DeployWithKeysCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args)
+    disk_overrides = _parse_disk_overrides(disk)
+    dm = disko_mode or "auto"
+    cmd = DeployWithKeysCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args,
+                                disk_overrides=disk_overrides, disko_mode=dm, yes=yes)
     cmd.execute()
 
 

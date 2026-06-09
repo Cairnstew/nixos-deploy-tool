@@ -170,10 +170,15 @@ class WizardConfigScreen(BaseScreen):
                 try:
                     devices = self._svc.get_disko_devices(self._state.host_name)
                 except Exception:
-                    self.app.call_from_thread(
-                        self._set_status, "No disko devices found — skipping validation"
-                    )
-                    self.app.call_from_thread(self._go_to_deploy)
+                    if self._state.config_source == "manual":
+                        self.app.call_from_thread(
+                            self._eval_failed_manual,
+                        )
+                    else:
+                        self.app.call_from_thread(
+                            self._validation_error,
+                            "Could not evaluate disko devices from flake — check your configuration",
+                        )
                     return
 
                 summary_parts: list[str] = []
@@ -233,6 +238,14 @@ class WizardConfigScreen(BaseScreen):
     def _push_manual(self) -> None:
         devices = self._stashed_devices or {}
         self.app.push_screen(WizardManualScreen(self._svc, self._state, devices))
+
+    def _eval_failed_manual(self) -> None:
+        self.query_one("#status", Static).update(
+            "No disko devices found — selecting target disk manually"
+        )
+        self._stashed_devices = {}
+        self._state.disko_device_summary = ""
+        self.app.push_screen(WizardManualScreen(self._svc, self._state, {}))
 
     def _validation_error(self, msg: str) -> None:
         self.query_one("#status", Static).update(f"Validation error: {msg}")

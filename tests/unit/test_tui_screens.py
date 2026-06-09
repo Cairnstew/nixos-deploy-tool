@@ -208,7 +208,7 @@ async def test_wizard_config_validate_deploy_missing(
 async def test_wizard_config_validate_error(
     mock_deploy_service: MockDeployService,
 ) -> None:
-    """When disko eval fails, inner try handles it and pushes deploy screen."""
+    """When disko eval fails, shows error on config screen (no silent deploy)."""
     state = make_wizard_state(disko_mode="mount", ssh_target="")
     mock_deploy_service._nix._results[
         'nixosConfigurations."test-host".config.disko.devices'
@@ -219,14 +219,15 @@ async def test_wizard_config_validate_error(
     ).run_test() as pilot:
         await pilot.pause()
         await asyncio.sleep(0.1)
-        # Set SSH target explicitly (not pre-filled, so auto-advance doesn't trigger)
         pilot.app.screen.query_one("#addr-input", Input).value = "nixos@10.0.0.1"
         _click_button(pilot.app.screen, "validate-deploy")
         screen = pilot.app.screen
         await asyncio.wait_for(screen.validation_done.wait(), timeout=5)
         await pilot.pause()
-        # The inner exception handler calls _go_to_deploy — verify transition
-        assert isinstance(pilot.app.screen, WizardDeployScreen)
+        # Should stay on config screen with error (NOT silently go to deploy)
+        assert isinstance(pilot.app.screen, WizardConfigScreen)
+        status = pilot.app.screen.query_one("#status", Static)
+        assert "error" in status._Static__content.lower() or "check" in status._Static__content.lower()
 
 
 @pytest.mark.asyncio
@@ -291,6 +292,31 @@ async def test_wizard_config_manual_route(
         config_screen = pilot.app.screen
         await asyncio.wait_for(config_screen.validation_done.wait(), timeout=5)
         await pilot.pause()
+        assert isinstance(pilot.app.screen, WizardManualScreen)
+
+
+@pytest.mark.asyncio
+async def test_wizard_config_manual_route_eval_fail(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """When disko eval fails in manual mode, still push manual screen."""
+    state = make_wizard_state()
+    mock_deploy_service._nix._results[
+        'nixosConfigurations."test-host".config.disko.devices'
+    ] = "not valid json"
+    async with ScreenHarness(
+        WizardConfigScreen(mock_deploy_service, state)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        sel = screen.query_one("#config-source-select", Select)
+        sel.value = "manual"
+        await pilot.pause()
+        _click_button(screen, "validate-deploy")
+        config_screen = pilot.app.screen
+        await asyncio.wait_for(config_screen.validation_done.wait(), timeout=5)
+        await pilot.pause()
+        # Should still push manual screen (user can pick disk manually)
         assert isinstance(pilot.app.screen, WizardManualScreen)
 
 
