@@ -46,4 +46,5 @@ class WizardHostScreen(Screen[None]):
         host = str(row[0])
         attr = str(row[1])
         state = WizardState(host_name=host, flake_attr=attr)
-        self.app.push_screen("wizard_config", state)
+        from nixos_deploy_tool.textual_ui.screens.wizard_config import WizardConfigScreen
+        self.app.push_screen(WizardConfigScreen(state))

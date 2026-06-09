@@ -10,7 +10,6 @@ from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 from nixos_deploy_tool.core.ssh import SshClient
 from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.services.deploy import DeployService
-from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
 from nixos_deploy_tool.textual_ui.wizard_state import WizardState
 
 
@@ -119,10 +118,6 @@ class WizardPartitionScreen(Screen[None]):
         )
         self.call_from_thread(self._go_to_deploy)
 
-    def _reenable_buttons(self) -> None:
-        self.query_one("#create-deploy", Button).disabled = False
-        self.query_one("#skip-deploy", Button).disabled = False
-        self.query_one("#back", Button).disabled = False
-
     def _go_to_deploy(self) -> None:
-        self.app.push_screen("wizard_deploy", self.state)
+        from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
+        self.app.push_screen(WizardDeployScreen(self.state))
