@@ -228,6 +228,54 @@ def test_build_extra_args_skip_disko_overrides_auto_detect() -> None:
     mock_eval.assert_not_called()
 
 
+def test_build_extra_args_warns_on_default_extra_args_conflict() -> None:
+    cfg = DeployConfig(
+        skip_disko=True,
+        default_extra_args=["--disko-mode", "mount"],
+    )
+    svc = DeployService(cfg)
+    with patch.object(svc.logger, "warning") as mock_warning:
+        result = svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    assert result == [
+        "--disko-mode", "mount",
+        "--phases", "kexec,install,reboot",
+    ]
+    mock_warning.assert_any_call(
+        "default_extra_args contains %s which will be overridden by "
+        "skip_disko/disko_mode/auto_detect_disko settings",
+        "--disko-mode",
+    )
+
+
+def test_build_extra_args_warns_on_cli_override() -> None:
+    cfg = DeployConfig(disko_mode="mount")
+    svc = DeployService(cfg)
+    with patch.object(svc.logger, "warning") as mock_warning:
+        result = svc._build_extra_args(
+            "myhost", "--phases kexec,disko,install,reboot", Path("/fake/flake")
+        )
+    assert result == [
+        "--disko-mode", "mount",
+        "--phases", "kexec,disko,install,reboot",
+    ]
+    mock_warning.assert_any_call(
+        "disko_mode=%s but --extra-args contains --phases; "
+        "last flag wins for nixos-anywhere",
+        "mount",
+    )
+
+
+def test_build_extra_args_logs_final_args() -> None:
+    cfg = DeployConfig(skip_disko=True)
+    svc = DeployService(cfg)
+    with patch.object(svc.logger, "info") as mock_info:
+        svc._build_extra_args("myhost", None, Path("/fake/flake"))
+    mock_info.assert_any_call(
+        "nixos-anywhere extra args: %s",
+        "--phases kexec,install,reboot",
+    )
+
+
 @patch("nixos_deploy_tool.services.prepare.KeyStore")
 def test_prepareservice_new_key(mock_keystore_cls) -> None:
     mock_ks = MagicMock()

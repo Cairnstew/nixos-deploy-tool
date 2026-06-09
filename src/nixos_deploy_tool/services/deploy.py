@@ -74,6 +74,14 @@ class DeployService(BaseService):
     ) -> list[str]:
         args: list[str] = list(self.config.default_extra_args)
 
+        if self.config.skip_disko or self.config.disko_mode or self.config.auto_detect_disko:
+            for flag in ("--phases", "--disko-mode"):
+                if flag in args:
+                    self.logger.warning(
+                        "default_extra_args contains %s which will be overridden by "
+                        "skip_disko/disko_mode/auto_detect_disko settings", flag
+                    )
+
         if self.config.skip_disko:
             if self.config.disko_mode:
                 self.logger.debug(
@@ -103,7 +111,22 @@ class DeployService(BaseService):
                 args.extend(["--phases", "kexec,install,reboot"])
 
         if cli_extra_args:
-            args.extend(shlex.split(cli_extra_args))
+            cli_flags = shlex.split(cli_extra_args)
+            if self.config.skip_disko and "--disko-mode" in cli_flags:
+                self.logger.warning(
+                    "skip_disko=true but --extra-args contains --disko-mode; "
+                    "last flag wins for nixos-anywhere"
+                )
+            if self.config.disko_mode and "--phases" in cli_flags:
+                self.logger.warning(
+                    "disko_mode=%s but --extra-args contains --phases; "
+                    "last flag wins for nixos-anywhere",
+                    self.config.disko_mode,
+                )
+            args.extend(cli_flags)
+
+        if args:
+            self.logger.info("nixos-anywhere extra args: %s", " ".join(args))
 
         return args
 
