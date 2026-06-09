@@ -66,13 +66,26 @@ class SubprocessRunner(ABC):
                 if proc.stdout:
                     for line in proc.stdout:
                         stripped = line.rstrip()
+                        self.logger.info("%s", stripped)
                         if on_output:
                             on_output(stripped)
                 proc.wait()
                 returncode = proc.returncode
+                self.logger.info("Command completed (exit %d)", returncode)
+                if returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        returncode, cmd, "", f"Command failed (exit {returncode})"
+                    )
+        except subprocess.CalledProcessError:
+            raise
         except Exception as exc:
             self.logger.error("Streaming run failed: %s", exc)
             returncode = -1
+            if on_done:
+                on_done(returncode)
+            raise self._wrap_error(
+                subprocess.CalledProcessError(returncode, cmd, "", str(exc))
+            ) from exc
 
         if on_done:
             on_done(returncode)
