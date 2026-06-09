@@ -36,6 +36,7 @@ class ToolPaths(pydantic.BaseModel):
 class DeployConfig(pydantic.BaseModel):
     flake_root: str = ""
     log_level: str = "info"
+    log_file: str = ""
     live_iso_user: str = "nixos"
     tailscale: TailscaleConfig = pydantic.Field(default_factory=TailscaleConfig)
     paths: ToolPaths = pydantic.Field(default_factory=ToolPaths)

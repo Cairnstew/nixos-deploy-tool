@@ -38,10 +38,13 @@ def _resolve_flake_root(flake_arg: Path | None, config: str) -> Path | None:
 def main(
     ctx: typer.Context,
     verbose: bool = False,
+    log_file: Path | None = None,
     flake_root: Path | None = None,
 ) -> None:
     ctx.ensure_object(dict)
     config = load_config()
+    if log_file:
+        config.log_file = str(log_file)
     resolved_root = _resolve_flake_root(flake_root, config.flake_root)
     if resolved_root:
         config.flake_root = str(resolved_root)
