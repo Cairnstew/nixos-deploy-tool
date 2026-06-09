@@ -17,6 +17,7 @@ class SshClient:
             "ssh",
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "ConnectTimeout=10",
         ]
         if self._key:
             cmd.extend(["-i", self._key])

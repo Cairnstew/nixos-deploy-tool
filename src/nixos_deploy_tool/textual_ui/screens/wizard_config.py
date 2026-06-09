@@ -111,12 +111,14 @@ class WizardConfigScreen(Screen[None]):
             self._go_to_deploy()
 
     def _validate_and_deploy(self) -> None:
-        status = self.query_one("#status", Static)
-        status.update("Validating partitions...")
+        self.query_one("#status", Static).update("Starting validation...")
         self.query_one("#validate-deploy", Button).disabled = True
         self.query_one("#deploy-skip", Button).disabled = True
         thread = threading.Thread(target=self._validation_thread, daemon=True)
         thread.start()
+
+    def _set_status(self, msg: str) -> None:
+        self.query_one("#status", Static).update(msg)
 
     def _validation_thread(self) -> None:
         app = self.app
@@ -126,11 +128,45 @@ class WizardConfigScreen(Screen[None]):
         try:
             if self.state.disko_mode in ("mount", "auto"):
                 svc = DeployService(cfg)
-                missing = svc.validate_mount_partitions(
-                    self.state.host_name,
-                    self.state.ssh_target,
-                    self.state.ssh_key,
-                )
+                self.call_from_thread(self._set_status, "Evaluating disko config...")
+                try:
+                    devices = svc._eval_disko_devices(self.state.host_name)
+                except Exception:
+                    self.call_from_thread(
+                        self._set_status, "No disko devices found — skipping validation"
+                    )
+                    self.call_from_thread(self._go_to_deploy)
+                    return
+
+                ssh = SshClient(self.state.ssh_target, self.state.ssh_key)
+                expected: list[str] = []
+                for disk_name, disk in devices.get("disk", {}).items():
+                    partitions = (
+                        disk.get("content", {}).get("partitions", []) or []
+                    )
+                    for part in partitions:
+                        part_name = part.get("name", "")
+                        if part_name:
+                            expected.append(f"disk-{disk_name}-{part_name}")
+
+                for i, label in enumerate(expected):
+                    self.call_from_thread(
+                        self._set_status,
+                        f"Checking partition {i + 1} of {len(expected)}: {label}...",
+                    )
+                    if not ssh.partition_exists(label):
+                        missing.append(label)
+
+                if missing:
+                    self.call_from_thread(
+                        self._set_status,
+                        f"{len(missing)} partition(s) missing",
+                    )
+                else:
+                    self.call_from_thread(
+                        self._set_status,
+                        f"All {len(expected)} partitions found",
+                    )
         except Exception as exc:
             self.call_from_thread(self._validation_error, str(exc))
             return
@@ -142,7 +178,8 @@ class WizardConfigScreen(Screen[None]):
             self.call_from_thread(self._go_to_deploy)
 
     def _push_partitions(self) -> None:
-        from nixos_deploy_tool.textual_ui.screens.wizard_partitions import WizardPartitionScreen
+from nixos_deploy_tool.core.ssh import SshClient
+from nixos_deploy_tool.textual_ui.screens.wizard_partitions import WizardPartitionScreen
         self.app.push_screen(WizardPartitionScreen(self.state))
 
     def _validation_error(self, msg: str) -> None:
