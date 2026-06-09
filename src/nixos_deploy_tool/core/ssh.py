@@ -24,10 +24,10 @@ class SshClient:
         cmd.append(self._target)
         return cmd
 
-    def run(self, command: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    def run(self, command: str, check: bool = True, timeout: int = 30) -> subprocess.CompletedProcess[str]:
         full_cmd = [*self._base_cmd(), command]
         self._logger.debug("Running: ssh ... %s", command)
-        result = subprocess.run(full_cmd, capture_output=True, text=True)
+        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout)
         if check and result.returncode != 0:
             raise RuntimeError(
                 f"remote command failed (exit {result.returncode}): {command}\n{result.stderr}"

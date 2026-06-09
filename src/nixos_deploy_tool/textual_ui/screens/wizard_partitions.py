@@ -118,6 +118,11 @@ class WizardPartitionScreen(Screen[None]):
         )
         self.call_from_thread(self._go_to_deploy)
 
+    def _reenable_buttons(self) -> None:
+        self.query_one("#create-deploy", Button).disabled = False
+        self.query_one("#skip-deploy", Button).disabled = False
+        self.query_one("#back", Button).disabled = False
+
     def _go_to_deploy(self) -> None:
         from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
         self.app.push_screen(WizardDeployScreen(self.state))

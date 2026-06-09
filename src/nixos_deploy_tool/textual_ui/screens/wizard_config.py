@@ -58,8 +58,11 @@ class WizardConfigScreen(Screen[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._eval_disko_summary()
+        threading.Thread(target=self._eval_disko_summary, daemon=True).start()
         self.query_one("#addr-input", Input).focus()
+
+    def _update_disko_summary(self, msg: str) -> None:
+        self.query_one("#disko-summary", Static).update(msg)
 
     def _eval_disko_summary(self) -> None:
         app = self.app
@@ -75,11 +78,18 @@ class WizardConfigScreen(Screen[None]):
             devices = json.loads(raw)
             disk_count = len(devices.get("disk", {}))
             summary = f"Disko devices: {disk_count} disk(s) configured"
-            self.query_one("#disko-summary", Static).update(summary)
+            self.call_from_thread(self._update_disko_summary, summary)
             self.state.disko_mode = "auto"
         except (NixEvalError, json.JSONDecodeError):
-            self.query_one("#disko-summary", Static).update(
-                "No disko devices found — partitions may be configured manually"
+            self.call_from_thread(
+                self._update_disko_summary,
+                "No disko devices found — partitions may be configured manually",
+            )
+            self.state.disko_mode = "skip"
+        except Exception:
+            self.call_from_thread(
+                self._update_disko_summary,
+                "Could not evaluate disko config",
             )
             self.state.disko_mode = "skip"
 

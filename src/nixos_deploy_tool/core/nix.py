@@ -16,7 +16,7 @@ class NixRunner:
         for key, val in kwargs.items():
             cmd.extend([f"--{key.replace('_', '-')}", val])
         self._logger.info("Running: %s", " ".join(cmd))
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, timeout=300)
         if result.returncode != 0:
             raise RuntimeError(
                 f"`{' '.join(cmd)}` failed (exit {result.returncode})"
@@ -27,7 +27,7 @@ class NixRunner:
         cmd = ["nix", "eval", "--json", "--expr", expr]
         if flake_root:
             cmd.extend(["--option", "flake", str(flake_root)])
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if result.returncode != 0:
             raise RuntimeError(
                 f"`{' '.join(cmd)}` failed (exit {result.returncode}):\n{result.stderr}"
@@ -36,7 +36,7 @@ class NixRunner:
 
     def eval_flake_json(self, attr: str, flake_root: Path) -> str:
         cmd = ["nix", "eval", "--json", f"{flake_root}#{attr}"]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if result.returncode != 0:
             raise NixEvalError(
                 f"Failed to eval '{attr}': {result.stderr.strip()}"
