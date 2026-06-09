@@ -206,7 +206,7 @@ async def test_wizard_config_validate_error(
     mock_deploy_service: MockDeployService,
 ) -> None:
     """When disko eval fails, inner try handles it and pushes deploy screen."""
-    state = make_wizard_state(disko_mode="mount")
+    state = make_wizard_state(disko_mode="mount", ssh_target="")
     mock_deploy_service._nix._results[
         'nixosConfigurations."test-host".config.disko.devices'
     ] = "not valid json"
@@ -216,6 +216,8 @@ async def test_wizard_config_validate_error(
     ).run_test() as pilot:
         await pilot.pause()
         await asyncio.sleep(0.1)
+        # Set SSH target explicitly (not pre-filled, so auto-advance doesn't trigger)
+        pilot.app.screen.query_one("#addr-input", Input).value = "nixos@10.0.0.1"
         _click_button(pilot.app.screen, "validate-deploy")
         screen = pilot.app.screen
         await asyncio.wait_for(screen.validation_done.wait(), timeout=5)

@@ -148,33 +148,40 @@ class DeployService(BaseService):
     ) -> list[str]:
         """Build the extra_args list for nixos-anywhere.
 
-        The *disko_mode* parameter (``"auto"`` / ``"mount"`` / ``"create"`` / ``"skip"``)
-        comes from the TUI radio selection and takes precedence over
-        ``DeployConfig.disko_mode``.  Use ``"auto"`` (the default) to fall back
-        to the config file.
+        When *disko_mode* is explicitly set (not ``"auto"``), it takes
+        precedence over all config-file fields (``skip_disko``,
+        ``disko_mode``, ``auto_detect_disko``).  Use ``"auto"`` (the
+        default) to fall back to the config file.
         """
         args: list[str] = list(self.config.default_extra_args)
 
-        has_config_override = (
-            self.config.skip_disko or self.config.disko_mode or self.config.auto_detect_disko
-        )
-        if has_config_override:
-            for flag in ("--phases", "--disko-mode"):
-                if flag in args:
-                    self.logger.warning(
-                        "default_extra_args contains %s which will be overridden by "
-                        "skip_disko/disko_mode/auto_detect_disko settings",
-                        flag,
-                    )
+        explicit = disko_mode != "auto"
 
-        # TUI selection takes precedence over config file
-        effective_disko_mode = disko_mode if disko_mode != "auto" else self.config.disko_mode
+        if not explicit:
+            has_config_override = (
+                self.config.skip_disko or self.config.disko_mode or self.config.auto_detect_disko
+            )
+            if has_config_override:
+                for flag in ("--phases", "--disko-mode"):
+                    if flag in args:
+                        self.logger.warning(
+                            "default_extra_args contains %s which will be overridden by "
+                            "skip_disko/disko_mode/auto_detect_disko settings",
+                            flag,
+                        )
 
-        if self.config.skip_disko or effective_disko_mode == "skip":
-            args.extend(["--phases", "kexec,install,reboot"])
+        # --- Resolve disko mode -------------------------------------------------
+        if explicit:
+            if disko_mode == "skip":
+                args.extend(["--phases", "kexec,install,reboot"])
+            else:
+                args.extend(["--disko-mode", disko_mode])
 
-        elif effective_disko_mode:
-            args.extend(["--disko-mode", effective_disko_mode])
+        elif self.config.skip_disko or self.config.disko_mode:
+            if self.config.skip_disko:
+                args.extend(["--phases", "kexec,install,reboot"])
+            else:
+                args.extend(["--disko-mode", self.config.disko_mode])  # type: ignore[arg-type]
 
         elif self.config.auto_detect_disko:
             try:
@@ -187,19 +194,21 @@ class DeployService(BaseService):
                 self.logger.info("diskoScript not found — skipping disko phase")
                 args.extend(["--phases", "kexec,install,reboot"])
 
+        # --- Merge CLI extra-args -----------------------------------------------
         if cli_extra_args:
             cli_flags = shlex.split(cli_extra_args)
-            if self.config.skip_disko and "--disko-mode" in cli_flags:
-                self.logger.warning(
-                    "skip_disko=true but --extra-args contains --disko-mode; "
-                    "last flag wins for nixos-anywhere"
-                )
-            if self.config.disko_mode and "--phases" in cli_flags:
-                self.logger.warning(
-                    "disko_mode=%s but --extra-args contains --phases; "
-                    "last flag wins for nixos-anywhere",
-                    self.config.disko_mode,
-                )
+            if not explicit:
+                if self.config.skip_disko and "--disko-mode" in cli_flags:
+                    self.logger.warning(
+                        "skip_disko=true but --extra-args contains --disko-mode; "
+                        "last flag wins for nixos-anywhere"
+                    )
+                if self.config.disko_mode and "--phases" in cli_flags:
+                    self.logger.warning(
+                        "disko_mode=%s but --extra-args contains --phases; "
+                        "last flag wins for nixos-anywhere",
+                        self.config.disko_mode,
+                    )
             args.extend(cli_flags)
 
         if args:

@@ -97,12 +97,30 @@ def wizard(
     extra_args: str | None = typer.Option(
         None, "--extra-args", help="Extra arguments forwarded to nixos-anywhere"
     ),
+    disko_mode: str | None = typer.Option(
+        None, "--disko-mode", help="Disko mode: auto, mount, create, skip"
+    ),
+    skip_disko: bool = typer.Option(
+        False, "--skip-disko", help="Skip disko entirely (--disko-mode skip shorthand)"
+    ),
+    create_partitions: bool = typer.Option(
+        False, "--create-partitions", help="Auto-create missing partitions without prompt"
+    ),
 ) -> None:
+    state_overrides: dict[str, object] = {}
     if host:
-        cmd = DeployWizardCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args)
-        cmd.execute()
-    else:
-        run_tui(context=ctx.obj)
+        state_overrides["host_name"] = host
+    if addr:
+        state_overrides["ssh_target"] = addr
+    if extra_args:
+        state_overrides["extra_args"] = extra_args
+    if skip_disko:
+        state_overrides["disko_mode"] = "skip"
+    elif disko_mode is not None:
+        state_overrides["disko_mode"] = disko_mode
+    if create_partitions:
+        state_overrides["create_partitions"] = True
+    run_tui(context=ctx.obj, state_overrides=state_overrides)
 
 
 @app.command(name="with-keys")

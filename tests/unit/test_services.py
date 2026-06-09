@@ -257,6 +257,24 @@ def test_build_extra_args_logs_final_args() -> None:
     mock_info.assert_any_call("nixos-anywhere extra args: %s", "--phases kexec,install,reboot")
 
 
+def test_build_extra_args_explicit_mode_overrides_config_skip() -> None:
+    svc = DeployService(_cfg(skip_disko=True))
+    result = svc.build_extra_args("myhost", None, disko_mode="create")
+    assert result == ["--disko-mode", "create"]
+
+
+def test_build_extra_args_explicit_skip_overrides_config_mount() -> None:
+    svc = DeployService(_cfg(disko_mode="mount"))
+    result = svc.build_extra_args("myhost", None, disko_mode="skip")
+    assert result == ["--phases", "kexec,install,reboot"]
+
+
+def test_build_extra_args_explicit_mode_ignores_config_auto_detect() -> None:
+    svc = DeployService(_cfg(auto_detect_disko=True))
+    result = svc.build_extra_args("myhost", None, disko_mode="mount")
+    assert result == ["--disko-mode", "mount"]
+
+
 def test_prepareservice_new_key() -> None:
     with patch("nixos_deploy_tool.services.prepare.KeyStore") as mock_keystore_cls:
         mock_ks = MagicMock()

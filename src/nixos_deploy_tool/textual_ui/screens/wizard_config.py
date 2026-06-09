@@ -58,7 +58,22 @@ class WizardConfigScreen(BaseScreen):
         self._loop = asyncio.get_running_loop()
         self.validation_done.clear()
         threading.Thread(target=self._eval_disko_summary, daemon=True).start()
-        self.query_one("#addr-input", Input).focus()
+        # Pre-fill inputs from state (set by CLI flags)
+        if self._state.ssh_target:
+            self.query_one("#addr-input", Input).value = self._state.ssh_target
+        else:
+            self.query_one("#addr-input", Input).focus()
+        if self._state.extra_args:
+            self.query_one("#extra-args-input", Input).value = self._state.extra_args
+        if self._state.disko_mode != "auto":
+            mode_to_id = {"mount": "mode-mount", "create": "mode-create", "skip": "mode-skip"}
+            button_id = mode_to_id.get(self._state.disko_mode)
+            if button_id:
+                self.query_one(f"#{button_id}", RadioButton).value = True
+        # Auto-advance when all config is pre-filled via CLI.
+        # Validation runs in a thread so the TUI renders in parallel.
+        if self._state.ssh_target and self._state.disko_mode != "auto":
+            self._auto_validate_and_deploy()
 
     def _update_disko_summary(self, msg: str) -> None:
         self.query_one("#disko-summary", Static).update(msg)
@@ -101,7 +116,7 @@ class WizardConfigScreen(BaseScreen):
     def _validation_thread(self) -> None:
         missing: list[str] = []
         try:
-            if self._state.disko_mode in ("mount", "auto"):
+            if self._state.disko_mode in ("mount", "auto", "create"):
                 self.app.call_from_thread(self._set_status, "Evaluating disko config...")
                 try:
                     devices = self._svc.get_disko_devices(self._state.host_name)
@@ -149,6 +164,9 @@ class WizardConfigScreen(BaseScreen):
                     self.app.call_from_thread(self._push_partitions)
                 else:
                     self.app.call_from_thread(self._push_confirm)
+            else:
+                # "skip" mode — no disko validation, go straight to deploy
+                self.app.call_from_thread(self._go_to_deploy)
         except Exception as exc:
             self.app.call_from_thread(self._validation_error, str(exc))
         finally:
@@ -167,3 +185,8 @@ class WizardConfigScreen(BaseScreen):
 
     def _go_to_deploy(self) -> None:
         self.app.push_screen(WizardDeployScreen(self._svc, self._state))
+
+    def _auto_validate_and_deploy(self) -> None:
+        """Triggered when CLI flags pre-filled all required state."""
+        self._state.ssh_key = self._svc.resolve_ssh_key()
+        self._validate_and_deploy()

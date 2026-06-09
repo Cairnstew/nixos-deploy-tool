@@ -47,6 +47,9 @@ class WizardPartitionScreen(BaseScreen):
         table.add_columns("Partition", "Status")
         for label in self._state.missing_partlabels:
             table.add_row(label, "missing")
+        if self._state.create_partitions:
+            self._create_all_and_deploy()
+            return
         table.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

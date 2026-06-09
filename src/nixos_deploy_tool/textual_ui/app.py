@@ -15,7 +15,11 @@ class DeployToolApp(App[Screen[None]]):
         "wizard_host": WizardHostScreen,
     }
 
-    def __init__(self, context: AppContext | None = None) -> None:
+    def __init__(
+        self,
+        context: AppContext | None = None,
+        state_overrides: dict[str, object] | None = None,
+    ) -> None:
         super().__init__()
         if context is None or context.config is None or not context.config.flake_root:
             raise RuntimeError(
@@ -25,12 +29,19 @@ class DeployToolApp(App[Screen[None]]):
         self.context = context
         setup_logging(context.config, verbose=context.verbose)
         self._svc = context._get_deploy_service()
-        self._state = WizardState()
+        state = WizardState()
+        if state_overrides:
+            for key, value in state_overrides.items():
+                setattr(state, key, value)
+        self._state = state
 
     def on_mount(self) -> None:
         self.push_screen(WizardHostScreen(self._svc, self._state))
 
 
-def run_tui(context: AppContext | None = None) -> None:
-    app = DeployToolApp(context=context)
+def run_tui(
+    context: AppContext | None = None,
+    state_overrides: dict[str, object] | None = None,
+) -> None:
+    app = DeployToolApp(context=context, state_overrides=state_overrides)
     app.run()

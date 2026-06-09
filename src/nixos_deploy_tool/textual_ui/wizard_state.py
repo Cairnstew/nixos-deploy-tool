@@ -13,3 +13,4 @@ class WizardState:
     extra_args: str | None = None
     missing_partlabels: list[str] = field(default_factory=list)
     disko_device_summary: str = ""
+    create_partitions: bool = False

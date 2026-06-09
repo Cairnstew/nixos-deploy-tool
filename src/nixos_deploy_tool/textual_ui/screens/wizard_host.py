@@ -30,6 +30,14 @@ class WizardHostScreen(ListScreen):
     def on_mount(self) -> None:
         table = self.query_one("#hosts-table", DataTable)
         table.add_columns("Host", "Flake Attribute")
+        # If host is already set (from CLI flags), auto-advance
+        if self._state.host_name:
+            for h in self._svc.list_hosts():
+                if h["name"] == self._state.host_name:
+                    self._state.flake_attr = h.get("attr", self._state.host_name)
+                    break
+            self.app.push_screen(WizardConfigScreen(self._svc, self._state))
+            return
         table.focus()
         # ListScreen.on_mount() is called automatically by Textual's
         # MRO dispatch — do NOT call super().on_mount() here or rows
