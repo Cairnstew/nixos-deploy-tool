@@ -5,7 +5,7 @@ import threading
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Label, Static
+from textual.widgets import Button, Label, Select, Static
 
 from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.base import BaseScreen
@@ -21,19 +21,19 @@ class WizardPartitionScreen(BaseScreen):
         self._svc = svc
         self._state = state
         self.creation_done = asyncio.Event()
+        self._part_choices: dict[str, str] = {}
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
-            Label("Partition Validation Results", classes="title"),
+            Label("Partition Configuration", classes="title"),
             Static(
-                f"The following partitions are missing on '{self._state.ssh_target}':",
+                f"Choose which partitions to create on '{self._state.ssh_target}':",
                 id="intro",
             ),
-            DataTable(id="partitions-table"),
-            Static("", id="command-display"),
+            Vertical(id="part-choices-container"),
             Horizontal(
-                Button("Create All & Deploy", id="create-deploy", variant="primary"),
-                Button("Skip & Deploy", id="skip-deploy", variant="default"),
+                Button("Create Selected & Deploy", id="create-deploy", variant="primary"),
+                Button("Skip All & Deploy", id="skip-deploy", variant="default"),
                 Button("Back", id="back", variant="default"),
                 classes="button-row",
             ),
@@ -43,32 +43,50 @@ class WizardPartitionScreen(BaseScreen):
     async def on_mount(self) -> None:
         self._loop = asyncio.get_running_loop()
         self.creation_done.clear()
-        table = self.query_one("#partitions-table", DataTable)
-        table.add_columns("Partition", "Status")
+        container = self.query_one("#part-choices-container", Vertical)
         for label in self._state.missing_partlabels:
-            table.add_row(label, "missing")
+            self._part_choices[label] = "create"
+            row = Horizontal(
+                Label(f"  {label}", classes="part-label"),
+                Select(
+                    options=[("Create", "create"), ("Skip", "skip")],
+                    value="create",
+                    id=f"part-{label}",
+                ),
+            )
+            await container.mount(row)
         if self._state.create_partitions:
-            self._create_all_and_deploy()
+            self._create_selected()
             return
-        table.focus()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        prefix = "part-"
+        if event.select.id and event.select.id.startswith(prefix):
+            label = event.select.id[len(prefix):]
+            self._part_choices[label] = str(event.value)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "create-deploy":
-            self._create_all_and_deploy()
+            self._create_selected()
         elif event.button.id == "skip-deploy":
             self._go_to_deploy()
         elif event.button.id == "back":
             self.app.pop_screen()
 
-    def _create_all_and_deploy(self) -> None:
+    def _create_selected(self) -> None:
+        """Create only the partitions marked for creation."""
+        to_create = [lbl for lbl, choice in self._part_choices.items() if choice == "create"]
+        if not to_create:
+            self._go_to_deploy()
+            return
         self.query_one("#create-deploy", Button).disabled = True
         self.query_one("#skip-deploy", Button).disabled = True
         self.query_one("#back", Button).disabled = True
         self.query_one("#status", Static).update("Creating partitions...")
-        thread = threading.Thread(target=self._create_thread, daemon=True)
+        thread = threading.Thread(target=self._create_thread, args=(to_create,), daemon=True)
         thread.start()
 
-    def _create_thread(self) -> None:
+    def _create_thread(self, to_create: list[str]) -> None:
         try:
             devices_raw = self._svc.get_disko_devices(self._state.host_name)
         except Exception:
@@ -82,11 +100,10 @@ class WizardPartitionScreen(BaseScreen):
         ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
         for disk_name, disk in devices_raw.get("disk", {}).items():
             device = disk.get("device", "")
-            partitions = disk.get("content", {}).get("partitions", []) or []
-            for part in partitions:
+            for part in (disk.get("content", {}).get("partitions", []) or []):
                 part_name = part.get("name", "")
                 label = f"disk-{disk_name}-{part_name}"
-                if label in self._state.missing_partlabels:
+                if label in to_create:
                     self.app.call_from_thread(
                         self.query_one("#status", Static).update,
                         f"Creating partition '{label}' on {device}...",
@@ -107,7 +124,7 @@ class WizardPartitionScreen(BaseScreen):
 
         self.app.call_from_thread(
             self.query_one("#status", Static).update,
-            "All partitions created successfully",
+            "Selected partitions created successfully",
         )
         self.app.call_from_thread(self._go_to_deploy)
         self._loop.call_soon_threadsafe(self.creation_done.set)

@@ -352,8 +352,10 @@ async def test_wizard_partitions_composition(
         WizardPartitionScreen(mock_deploy_service, state)
     ).run_test() as pilot:
         await pilot.pause()
-        table = pilot.app.screen.query_one("#partitions-table", DataTable)
-        assert table.row_count == 1
+        container = pilot.app.screen.query_one("#part-choices-container", Vertical)
+        # Should have mounted one Select widget per missing partition
+        selects = container.query(Select)
+        assert len(selects) == 1
 
 
 @pytest.mark.asyncio
@@ -378,6 +380,7 @@ async def test_wizard_partitions_create_deploy(
         WizardPartitionScreen(mock_deploy_service, state)
     ).run_test() as pilot:
         await pilot.pause()
+        # Default is "create" for all partitions
         _click_button(pilot.app.screen, "create-deploy")
         screen = pilot.app.screen
         await asyncio.wait_for(screen.creation_done.wait(), timeout=5)
@@ -402,6 +405,48 @@ async def test_wizard_partitions_skip(
         _click_button(pilot.app.screen, "skip-deploy")
         await pilot.pause()
         assert isinstance(pilot.app.screen, WizardDeployScreen)
+
+
+@pytest.mark.asyncio
+async def test_wizard_partitions_per_part_skip(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Changing a partition to 'Skip' excludes it from creation."""
+    state = make_wizard_state(missing_partlabels=["disk-main-root", "disk-main-boot"])
+    mock_deploy_service._nix._results[
+        'nixosConfigurations."test-host".config.disko.devices'
+    ] = json.dumps({
+        "disk": {
+            "main": {
+                "device": "/dev/sda",
+                "content": {
+                    "partitions": [
+                        {"name": "root", "content": {"format": "ext4"}},
+                        {"name": "boot", "content": {"format": "vfat"}},
+                    ],
+                },
+            },
+        },
+    })
+
+    async with ScreenHarness(
+        WizardPartitionScreen(mock_deploy_service, state)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        # Change boot to Skip
+        boot_sel = screen.query_one("#part-disk-main-boot", Select)
+        boot_sel.value = "skip"
+        await pilot.pause()
+        _click_button(screen, "create-deploy")
+        await asyncio.wait_for(screen.creation_done.wait(), timeout=5)
+        await pilot.pause()
+        # Only root should have been created
+        assert len(mock_deploy_service.ssh_client.created_partitions) == 1
+        assert mock_deploy_service.ssh_client.created_partitions[0] == (
+            "/dev/sda",
+            "disk-main-root",
+        )
 
 
 # ── WizardDeployScreen ────────────────────────────────────────────
@@ -559,7 +604,8 @@ async def test_wizard_manual_composition(
         screen = pilot.app.screen
         await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
         await pilot.pause()
-        assert screen.query_one("#target-disks-table", DataTable).row_count == 2
+        # 2 disks + 2 children = 4 rows
+        assert screen.query_one("#target-disks-table", DataTable).row_count == 4
         assert screen.query_one("#continue", Button).disabled is True
 
 
@@ -576,7 +622,7 @@ async def test_wizard_manual_select_disk(
         screen = pilot.app.screen
         await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
         await pilot.pause()
-        # Click a row
+        # Click a row (row 0 = first disk)
         table = screen.query_one("#target-disks-table", DataTable)
         table.move_cursor(row=0, column=0)
         table.action_select_cursor()
@@ -586,6 +632,28 @@ async def test_wizard_manual_select_disk(
         # Planned layout should show flake partitions
         layout = screen.query_one("#planned-layout", Static)
         assert "root" in layout._Static__content
+
+
+@pytest.mark.asyncio
+async def test_wizard_manual_select_partition(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Selecting a partition resolves to parent disk on continue."""
+    state = make_wizard_state()
+    async with ScreenHarness(
+        WizardManualScreen(mock_deploy_service, state, _MOCK_FLAKE_DISKS)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        await asyncio.wait_for(screen.disks_loaded.wait(), timeout=5)
+        await pilot.pause()
+        # Click a partition row (row 1 = sda1, first partition of first disk)
+        table = screen.query_one("#target-disks-table", DataTable)
+        table.move_cursor(row=1, column=0)
+        table.action_select_cursor()
+        await pilot.pause()
+        assert state.manual_disk_selection == "/dev/sda1"
+        assert not screen.query_one("#continue", Button).disabled
 
 
 @pytest.mark.asyncio

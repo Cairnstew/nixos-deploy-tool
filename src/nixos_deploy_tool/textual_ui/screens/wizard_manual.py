@@ -25,11 +25,12 @@ class WizardManualScreen(BaseScreen):
         self._flake_devices = flake_devices.get("disk", {})
         self.disks_loaded = asyncio.Event()
         self._target_disks: list[dict] = []
+        self._all_devices: list[dict] = []
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
             Static("", id="disk-status"),
-            Label("Available disks on target:", classes="label"),
+            Label("Available devices on target:", classes="label"),
             DataTable(id="target-disks-table", cursor_type="row"),
             Static("", id="selected-disk-info"),
             Static("", id="planned-layout"),
@@ -47,10 +48,21 @@ class WizardManualScreen(BaseScreen):
         self.query_one("#continue", Button).disabled = True
         threading.Thread(target=self._load_disks_thread, daemon=True).start()
 
+    def _flatten_devices(self, disks: list[dict]) -> list[dict]:
+        """Flatten disk + children into a flat list with a type field."""
+        flat: list[dict] = []
+        for disk in disks:
+            flat.append({**disk, "_type": "disk"})
+            for child in disk.get("children") or []:
+                flat.append({**child, "_type": "part", "_parent": disk["name"]})
+        return flat
+
     def _load_disks_thread(self) -> None:
         try:
             ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
-            self._target_disks = ssh.list_disks()
+            raw = ssh.list_disks()
+            self._target_disks = raw
+            self._all_devices = self._flatten_devices(raw)
             self.app.call_from_thread(self._populate_target_table)
         except Exception as exc:
             self.app.call_from_thread(self._disk_load_error, str(exc))
@@ -59,23 +71,34 @@ class WizardManualScreen(BaseScreen):
 
     def _populate_target_table(self) -> None:
         table = self.query_one("#target-disks-table", DataTable)
-        table.add_columns("Device", "Size", "Model", "Partitions")
-        for disk in self._target_disks:
-            children = disk.get("children") or []
-            parts = ", ".join(
-                f"{c['name']}({c.get('fstype', '?')})" for c in children
-            ) if children else "(empty)"
+        table.add_columns("Device", "Size", "Type", "FSTYPE", "Label/Model")
+        for dev in self._all_devices:
+            label = dev.get("label") or dev.get("model") or ""
+            fstype = dev.get("fstype", "") or ""
             table.add_row(
-                f"/dev/{disk['name']}",
-                disk.get("size", "?"),
-                disk.get("model", "") or "?",
-                parts,
+                f"/dev/{dev['name']}",
+                dev.get("size", ""),
+                dev["_type"],
+                fstype,
+                label,
             )
+        count = len(self._all_devices)
         self.query_one("#disk-status", Static).update(
-            f"Found {len(self._target_disks)} disk(s) — select one"
+            f"Found {count} device(s) — select a disk or partition"
         )
-        if self._target_disks:
+        if self._all_devices:
             self.query_one("#target-disks-table", DataTable).focus()
+
+    def _find_parent_disk(self, dev_name: str) -> str:
+        """Resolve a partition to its parent disk."""
+        for disk in self._target_disks:
+            disk_path = f"/dev/{disk['name']}"
+            if dev_name == disk_path:
+                return dev_name
+            for child in disk.get("children") or []:
+                if f"/dev/{child['name']}" == dev_name:
+                    return disk_path
+        return dev_name
 
     def _update_planned_layout(self) -> None:
         if not self._state.manual_disk_selection:
@@ -83,31 +106,35 @@ class WizardManualScreen(BaseScreen):
             self.query_one("#continue", Button).disabled = True
             return
 
-        # Find the selected disk info
-        selected = None
-        for disk in self._target_disks:
-            if f"/dev/{disk['name']}" == self._state.manual_disk_selection:
-                selected = disk
-                break
-
         info = f"Selected: {self._state.manual_disk_selection}"
-        if selected:
-            children = selected.get("children") or []
-            existing = ", ".join(
-                f"{c['name']}({c.get('fstype', '?')})" for c in children
-            ) if children else "(empty)"
-            info += f"  |  Existing partitions: {existing}"
+        # Find which type of device was selected
+        selected_dev = None
+        for dev in self._all_devices:
+            if f"/dev/{dev['name']}" == self._state.manual_disk_selection:
+                selected_dev = dev
+                break
+        if selected_dev:
+            parent = self._find_parent_disk(self._state.manual_disk_selection)
+            if selected_dev["_type"] == "part":
+                info += f"  |  Parent disk: {parent}"
+            else:
+                children = selected_dev.get("children") or []
+                existing = ", ".join(
+                    f"{c['name']}({c.get('fstype', '?')})" for c in children
+                ) if children else "(empty)"
+                info += f"  |  Partitions: {existing}"
         self.query_one("#selected-disk-info", Static).update(info)
 
         # Show planned layout from flake
         lines: list[str] = []
-        for name, disk in self._flake_devices.items():
-            content = disk.get("content", {})
+        target = self._find_parent_disk(self._state.manual_disk_selection)
+        for name, fdisk in self._flake_devices.items():
+            content = fdisk.get("content", {})
             part_names = DeployService._parse_partition_names(content)
             if part_names:
-                lines.append(f"Will create on {self._state.manual_disk_selection}:")
+                lines.append(f"Will create on {target}:")
                 for pn in part_names:
-                    content_type = disk.get("content", {})
+                    content_type = fdisk.get("content", {})
                     fstype = "ext4"
                     if isinstance(content_type.get("partitions"), list):
                         for p in content_type["partitions"]:
@@ -138,12 +165,13 @@ class WizardManualScreen(BaseScreen):
     def _execute_and_advance(self) -> None:
         if not self._state.manual_disk_selection:
             return
-        # Map selected disk to first flake disk (if available)
+        # Resolve partition to parent disk for nixos-anywhere --disk flag
+        disk_device = self._find_parent_disk(self._state.manual_disk_selection)
         flake_disk_name = next(iter(self._flake_devices.keys()), "")
         if flake_disk_name:
-            self._state.disko_disk_overrides = {flake_disk_name: self._state.manual_disk_selection}
+            self._state.disko_disk_overrides = {flake_disk_name: disk_device}
         else:
-            self._state.disko_disk_overrides = {"main": self._state.manual_disk_selection}
+            self._state.disko_disk_overrides = {"main": disk_device}
 
         self._state.disko_mode = "mount"
 
