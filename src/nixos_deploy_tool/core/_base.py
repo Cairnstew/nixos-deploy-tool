@@ -55,6 +55,7 @@ class SubprocessRunner(ABC):
     ) -> int:
         cmd = [self.binary, *args]
         self.logger.info("Running: %s", " ".join(cmd))
+        lines: list[str] = []
         try:
             with subprocess.Popen(
                 cmd,
@@ -66,6 +67,7 @@ class SubprocessRunner(ABC):
                 if proc.stdout:
                     for line in proc.stdout:
                         stripped = line.rstrip()
+                        lines.append(stripped)
                         self.logger.info("%s", stripped)
                         if on_output:
                             on_output(stripped)
@@ -73,8 +75,9 @@ class SubprocessRunner(ABC):
                 returncode = proc.returncode
                 self.logger.info("Command completed (exit %d)", returncode)
                 if returncode != 0:
+                    output = "\n".join(lines[-50:])
                     raise subprocess.CalledProcessError(
-                        returncode, cmd, "", f"Command failed (exit {returncode})"
+                        returncode, cmd, output, output
                     )
         except subprocess.CalledProcessError:
             raise
@@ -83,8 +86,9 @@ class SubprocessRunner(ABC):
             returncode = -1
             if on_done:
                 on_done(returncode)
+            output = "\n".join(lines[-50:])
             raise self._wrap_error(
-                subprocess.CalledProcessError(returncode, cmd, "", str(exc))
+                subprocess.CalledProcessError(returncode, cmd, output, str(exc))
             ) from exc
 
         if on_done:

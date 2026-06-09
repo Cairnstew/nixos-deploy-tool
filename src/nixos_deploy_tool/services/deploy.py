@@ -286,6 +286,7 @@ class DeployService(BaseService):
             )
             result: BaseResult = SuccessResult(message=f"Deployed {host}.")
         except Exception as exc:
+            self.logger.error("Deploy failed: %s", exc, exc_info=True)
             result = ErrorResult(message=f"Deploy failed: {exc}")
         if on_done:
             on_done(result)
