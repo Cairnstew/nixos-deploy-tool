@@ -59,7 +59,7 @@ class WizardDeployScreen(Screen[None]):
         if extra_args:
             cmd.extend(extra_args)
 
-        self._log.write(f"Running: {' '.join(cmd)}")
+        self.call_from_thread(self._log.write, f"Running: {' '.join(cmd)}")
         try:
             result = subprocess.run(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True

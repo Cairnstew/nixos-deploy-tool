@@ -34,7 +34,9 @@ class WizardHostScreen(Screen[None]):
         table.focus()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        host = event.row.get_value(0)
-        attr = event.row.get_value(1)
+        table = self.query_one("#hosts-table", DataTable)
+        row = table.get_row(event.row_key)
+        host = str(row[0])
+        attr = str(row[1])
         state = WizardState(host_name=host, flake_attr=attr)
         self.app.push_screen("wizard_config", state)

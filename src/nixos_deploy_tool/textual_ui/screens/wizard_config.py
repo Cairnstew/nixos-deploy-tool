@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Label, RadioSet, RadioButton, Static
 
@@ -112,21 +112,42 @@ class WizardConfigScreen(Screen[None]):
             self._go_to_deploy()
 
     def _validate_and_deploy(self) -> None:
+        status = self.query_one("#status", Static)
+        status.update("Validating partitions...")
+        self.query_one("#validate-deploy", Button).disabled = True
+        self.query_one("#deploy-skip", Button).disabled = True
+        thread = threading.Thread(target=self._validation_thread, daemon=True)
+        thread.start()
+
+    def _validation_thread(self) -> None:
         app = self.app
         ctx = getattr(app, "context", None)
         cfg = ctx.config if ctx else DeployConfig()
-        if self.state.disko_mode in ("mount", "auto"):
-            svc = DeployService(cfg)
-            missing = svc.validate_mount_partitions(
-                self.state.host_name,
-                self.state.ssh_target,
-                self.state.ssh_key,
+        missing: list[str] = []
+        try:
+            if self.state.disko_mode in ("mount", "auto"):
+                svc = DeployService(cfg)
+                missing = svc.validate_mount_partitions(
+                    self.state.host_name,
+                    self.state.ssh_target,
+                    self.state.ssh_key,
+                )
+        except Exception as exc:
+            self.call_from_thread(self._validation_error, str(exc))
+            return
+
+        self.state.missing_partlabels = missing
+        if missing:
+            self.call_from_thread(
+                self.app.push_screen, "wizard_partitions", self.state
             )
-            self.state.missing_partlabels = missing
-            if missing:
-                self.app.push_screen("wizard_partitions", self.state)
-                return
-        self._go_to_deploy()
+        else:
+            self.call_from_thread(self._go_to_deploy)
+
+    def _validation_error(self, msg: str) -> None:
+        self.query_one("#status", Static).update(f"Validation error: {msg}")
+        self.query_one("#validate-deploy", Button).disabled = False
+        self.query_one("#deploy-skip", Button).disabled = False
 
     def _go_to_deploy(self) -> None:
         self.app.push_screen("wizard_deploy", self.state)
