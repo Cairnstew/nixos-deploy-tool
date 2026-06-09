@@ -12,12 +12,19 @@ from nixos_deploy_tool.textual_ui.wizard_state import WizardState
 
 class WizardHostScreen(Screen[None]):
     CSS_PATH = "../styles/wizard.tcss"
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("escape", "quit", "Quit"),
+    ]
+
+    def action_quit(self) -> None:
+        self.app.exit()
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Vertical(
             Label("Select a host configuration to deploy:", classes="instruction"),
-            DataTable(id="hosts-table"),
+            DataTable(id="hosts-table", cursor_type="row"),
         )
         yield Footer()
 
