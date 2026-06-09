@@ -138,12 +138,12 @@ class WizardManualScreen(BaseScreen):
     def _execute_and_advance(self) -> None:
         if not self._state.manual_disk_selection:
             return
-        # Map selected disk to first flake disk
+        # Map selected disk to first flake disk (if available)
         flake_disk_name = next(iter(self._flake_devices.keys()), "")
         if flake_disk_name:
             self._state.disko_disk_overrides = {flake_disk_name: self._state.manual_disk_selection}
         else:
-            self._state.disko_disk_overrides = {}
+            self._state.disko_disk_overrides = {"main": self._state.manual_disk_selection}
 
         self._state.disko_mode = "mount"
 

@@ -46,6 +46,8 @@ class WizardConfirmScreen(BaseScreen):
         devices: list[str] = []
         if self._state.disko_disk_overrides:
             devices = list(self._state.disko_disk_overrides.values())
+        elif self._state.manual_disk_selection:
+            devices = [self._state.manual_disk_selection]
         elif self._state.disko_device_summary:
             import re
             devices = re.findall(r"/dev/\S+", self._state.disko_device_summary)
@@ -58,6 +60,8 @@ class WizardConfirmScreen(BaseScreen):
         layout = self.query_one("#confirm-disko-layout", Static)
         if self._state.disko_device_summary:
             layout.update(f"Disk layout:\n{self._state.disko_device_summary}")
+        elif self._state.manual_disk_selection:
+            layout.update(f"Selected device: {self._state.manual_disk_selection}")
         else:
             layout.update("No disko devices configured — deploying without disk management")
 
@@ -68,6 +72,8 @@ class WizardConfirmScreen(BaseScreen):
                 for name, dev in self._state.disko_disk_overrides.items()
             )
             disk_map.update(f"Disk mapping: {mapping}")
+        elif self._state.manual_disk_selection:
+            disk_map.update(f"Disk: {self._state.manual_disk_selection}")
         else:
             disk_map.update("")
 
