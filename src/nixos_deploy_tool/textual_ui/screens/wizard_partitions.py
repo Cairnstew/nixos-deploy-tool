@@ -99,7 +99,7 @@ class WizardPartitionScreen(BaseScreen):
 
         ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
         for disk_name, disk in devices_raw.get("disk", {}).items():
-            device = disk.get("device", "")
+            device = self._state.disko_disk_overrides.get(disk_name, disk.get("device", ""))
             for part in (disk.get("content", {}).get("partitions", []) or []):
                 part_name = part.get("name", "")
                 label = f"disk-{disk_name}-{part_name}"
