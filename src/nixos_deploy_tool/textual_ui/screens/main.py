@@ -8,7 +8,7 @@ from textual.widgets import Button, Footer, Header, Static
 
 class MainScreen(Screen[None]):
     CSS_PATH = "../styles/main.tcss"
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS = [("d", "deploy", "Deploy Wizard"), ("q", "quit", "Quit")]
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -17,7 +17,7 @@ class MainScreen(Screen[None]):
             Static("NixOS deployment dashboard", classes="subtitle"),
             Horizontal(
                 Button("Build ISO", id="iso", variant="primary"),
-                Button("Deploy", id="deploy", variant="primary"),
+                Button("Deploy Wizard", id="deploy", variant="primary"),
                 Button("Secrets", id="secrets", variant="primary"),
                 Button("Tailscale", id="tailscale", variant="primary"),
                 classes="button-row",
@@ -27,4 +27,8 @@ class MainScreen(Screen[None]):
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.app.log(f"Button pressed: {event.button.id}")
+        if event.button.id == "deploy":
+            self.app.push_screen("wizard_host")
+
+    def action_deploy(self) -> None:
+        self.app.push_screen("wizard_host")

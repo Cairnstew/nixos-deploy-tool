@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shlex
 from pathlib import Path
@@ -8,6 +9,7 @@ from nixos_deploy_tool.core.flake import FlakeIntrospector
 from nixos_deploy_tool.core.key_store import KeyStore
 from nixos_deploy_tool.core.nix import NixRunner
 from nixos_deploy_tool.core.nixos_anywhere import NixosAnywhere
+from nixos_deploy_tool.core.ssh import SshClient
 from nixos_deploy_tool.exceptions import NixEvalError
 from nixos_deploy_tool.models.config import DeployConfig
 from nixos_deploy_tool.models.result import BaseResult, ErrorResult, SuccessResult
@@ -65,6 +67,53 @@ class DeployService(BaseService):
             return keystore.extra_files_dir(host)
         self.logger.info("No stored keypair found for '%s', host key will be random", host)
         return None
+
+    def _eval_disko_devices(self, host_name: str) -> dict:
+        raw = self._nix.eval_flake_json(
+            f'nixosConfigurations."{host_name}".config.disko.devices',
+            self._flake_root,
+        )
+        return json.loads(raw)
+
+    def validate_mount_partitions(
+        self,
+        host_name: str,
+        target: str,
+        ssh_key: str | None = None,
+    ) -> list[str]:
+        try:
+            devices = self._eval_disko_devices(host_name)
+        except (NixEvalError, json.JSONDecodeError):
+            self.logger.warning(
+                "Cannot evaluate disko devices config for '%s' — skipping partition validation",
+                host_name,
+            )
+            return []
+        ssh = SshClient(target, ssh_key)
+        expected: list[str] = []
+        for disk_name, disk in devices.get("disk", {}).items():
+            partitions = (
+                disk.get("content", {}).get("partitions", [])
+                or []
+            )
+            for part in partitions:
+                part_name = part.get("name", "")
+                if part_name:
+                    expected.append(f"disk-{disk_name}-{part_name}")
+        if not expected:
+            self.logger.info("No expected partitions found in disko config for '%s'", host_name)
+            return []
+        missing: list[str] = []
+        for label in expected:
+            if not ssh.partition_exists(label):
+                missing.append(label)
+        if missing:
+            self.logger.warning(
+                "Missing partitions on '%s': %s", target, ", ".join(missing)
+            )
+        else:
+            self.logger.info("All %d expected partitions found on '%s'", len(expected), target)
+        return missing
 
     def _build_extra_args(
         self,

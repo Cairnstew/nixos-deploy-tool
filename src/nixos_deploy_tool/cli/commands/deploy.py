@@ -95,14 +95,21 @@ def run(
 @app.command()
 def wizard(
     ctx: typer.Context,
-    host: str,
+    host: str | None = typer.Option(
+        None, "--host", help="Host to deploy (skip to select from TUI)"
+    ),
     addr: str | None = None,
     extra_args: str | None = typer.Option(
         None, "--extra-args", help="Extra arguments forwarded to nixos-anywhere"
     ),
 ) -> None:
-    cmd = DeployWizardCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args)
-    cmd.execute()
+    if host:
+        cmd = DeployWizardCommand(ctx.obj, host=host, addr=addr, extra_args=extra_args)
+        cmd.execute()
+    else:
+        from nixos_deploy_tool.textual_ui.app import DeployToolApp
+        tui_app = DeployToolApp(context=ctx.obj)
+        tui_app.run()
 
 
 @app.command(name="with-keys")

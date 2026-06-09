@@ -1,0 +1,57 @@
+Screen {
+    align: center middle;
+}
+
+.instruction {
+    margin: 1 0;
+    text-style: bold;
+}
+
+.title {
+    margin: 1 0;
+    text-style: bold;
+    text-align: center;
+}
+
+.button-row {
+    align: center middle;
+    margin: 1 0;
+}
+
+#hosts-table {
+    height: 1fr;
+    margin: 0 2;
+}
+
+#disko-summary {
+    margin: 1 2;
+    color: $primary;
+}
+
+#deploy-log {
+    height: 1fr;
+    margin: 0 2;
+    border: solid $primary;
+}
+
+#deploy-status {
+    margin: 1 2;
+    text-style: bold;
+}
+
+#status {
+    margin: 1 2;
+    color: $warning;
+}
+
+RadioSet {
+    margin: 0 2;
+}
+
+Input {
+    margin: 0 2;
+}
+
+Label {
+    margin: 1 2 0 2;
+}
