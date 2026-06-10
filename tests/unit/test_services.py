@@ -277,13 +277,12 @@ def test_build_extra_args_explicit_mode_ignores_config_auto_detect() -> None:
 
 
 def test_build_extra_args_disk_overrides() -> None:
+    """``--disk`` is not a real nixos-anywhere flag — overrides are ignored."""
     svc = DeployService(_cfg())
     result = svc.build_extra_args(
         "myhost", None, disk_overrides={"main": "/dev/sdb", "cache": "/dev/nvme0n1"}
     )
-    assert "--disk" in result
-    assert result[result.index("--disk") + 1] == "main"
-    assert result[result.index("--disk") + 2] == "/dev/sdb"
+    assert "--disk" not in result
 
 
 def test_prepareservice_new_key() -> None:

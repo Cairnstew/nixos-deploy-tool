@@ -212,10 +212,10 @@ class DeployService(BaseService):
                     )
             args.extend(cli_flags)
 
-        # --- Disk device overrides -----------------------------------------------
-        if disk_overrides:
-            for name, device in disk_overrides.items():
-                args.extend(["--disk", name, device])
+        # --- Disk device overrides (reserved for future nixos-anywhere support) --
+        # nixos-anywhere currently reads the device from the disko config's `device`
+        # attribute per disk.  No CLI flag exists to override it.
+        # https://github.com/nix-community/nixos-anywhere/issues/...
 
         if args:
             self.logger.info("nixos-anywhere extra args: %s", " ".join(args))
