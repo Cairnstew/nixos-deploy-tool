@@ -202,6 +202,14 @@ class DeployService(BaseService):
                 self.logger.info("diskoScript not found — skipping disko phase")
                 args.extend(["--phases", "kexec,install,reboot"])
 
+        else:
+            # disko_mode="auto" with no config overrides — safe default: mount only
+            if not any(flag in args for flag in ("--disko-mode", "--phases")):
+                self.logger.info(
+                    "disko_mode=auto with no config override — defaulting to --disko-mode mount (safe)"
+                )
+                args.extend(["--disko-mode", "mount"])
+
         # --- Merge CLI extra-args -----------------------------------------------
         if cli_extra_args:
             cli_flags = shlex.split(cli_extra_args)

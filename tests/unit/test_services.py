@@ -141,16 +141,16 @@ def test_deployservice_with_keys_defaults_to_host_when_no_addr() -> None:
     assert m.call_args.kwargs["target"] == "myhost"
 
 
-def test_build_extra_args_empty_config() -> None:
+def test_build_extra_args_empty_config_defaults_to_mount() -> None:
     svc = DeployService(_cfg())
     result = svc.build_extra_args("myhost", None)
-    assert result == []
+    assert result == ["--disko-mode", "mount"]
 
 
 def test_build_extra_args_default_extra_args() -> None:
     svc = DeployService(_cfg(default_extra_args=["--verbose"]))
     result = svc.build_extra_args("myhost", None)
-    assert result == ["--verbose"]
+    assert result == ["--verbose", "--disko-mode", "mount"]
 
 
 def test_build_extra_args_skip_disko() -> None:
