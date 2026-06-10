@@ -10,7 +10,7 @@ class WizardState:
     ssh_target: str = ""
     ssh_key: str | None = None
     config_source: str = "flake"
-    disko_mode: str = "auto"
+    disko_mode: str = "mount"
     extra_args: str | None = None
     missing_partlabels: list[str] = field(default_factory=list)
     disko_device_summary: str = ""

@@ -50,8 +50,8 @@ class WizardConfigScreen(BaseScreen):
             Vertical(
                 Label("Disko mode:"),
                 RadioSet(
-                    RadioButton("Auto-detect", id="mode-auto", value=True),
-                    RadioButton("mount (existing partitions)", id="mode-mount"),
+                    RadioButton("Auto-detect", id="mode-auto"),
+                    RadioButton("mount (existing partitions)", id="mode-mount", value=True),
                     RadioButton("create (destructive)", id="mode-create"),
                     RadioButton("skip (no disko)", id="mode-skip"),
                     id="mode-select",
@@ -87,7 +87,7 @@ class WizardConfigScreen(BaseScreen):
         if self._state.ssh_target and self._state.config_source == "skip":
             self._go_to_deploy()
             return
-        if self._state.ssh_target and self._state.config_source == "flake" and self._state.disko_mode != "auto":
+        if self._state.ssh_target and self._state.config_source == "flake" and self._state.disko_mode in ("create", "skip"):
             self._auto_validate_and_deploy()
             return
         if self._state.ssh_target and self._state.config_source == "manual":
