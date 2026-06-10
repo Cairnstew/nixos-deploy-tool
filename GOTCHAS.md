@@ -92,3 +92,20 @@ Two code paths were affected:
 Worker threads in ``_create_thread`` that hit ``AttributeError`` or other non-RuntimeError
 exceptions die silently because ``except RuntimeError`` doesn't catch them. Always catch
 ``Exception`` in thread-level error handlers that surface status to the user.
+
+### ``nix eval --json`` on ``config.disko.devices`` fails
+The disko NixOS module injects non-serialisable function attributes
+(``_packages``, ``_scripts``, ``_config``, ``_create``, ``_meta``,
+``_mount``, ``_pkgs``, ``_unmount``, etc.) at every level of the device
+tree.  ``nix eval --json`` cannot serialise these — it raises
+``error: cannot convert a function to JSON``.
+
+**Fix**: ``NixRunner.eval_flake_json`` now builds a Nix expression that
+loads the flake via ``builtins.getFlake`` (with ``--impure``) and
+recursively strips all underscore-prefixed attributes with a
+``stripInternal`` helper before converting to JSON.  The transform is
+a no-op for attributes that have no ``_*`` keys.
+
+**Note about ``--impure``**: This requires ``--impure`` because
+``builtins.getFlake`` is impure.  The old approach used the flake URL
+syntax (``{flake}#{attr}``) which was pure but couldn't filter output.
