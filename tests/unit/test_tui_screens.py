@@ -362,7 +362,10 @@ async def test_wizard_partitions_composition(
 async def test_wizard_partitions_create_deploy(
     mock_deploy_service: MockDeployService,
 ) -> None:
-    state = make_wizard_state(missing_partlabels=["disk-main-root"])
+    state = make_wizard_state(
+        missing_partlabels=["disk-main-root"],
+        disko_disk_overrides={"main": "/dev/sda"},
+    )
     mock_deploy_service._nix._results[
         'nixosConfigurations."test-host".config.disko.devices'
     ] = json.dumps({
@@ -382,6 +385,10 @@ async def test_wizard_partitions_create_deploy(
         await pilot.pause()
         # Default is "create" for all partitions
         _click_button(pilot.app.screen, "create-deploy")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        # Preview shown, confirm to create
+        _click_button(pilot.app.screen, "confirm-preview")
         screen = pilot.app.screen
         await asyncio.wait_for(screen.creation_done.wait(), timeout=5)
         await pilot.pause()
@@ -412,7 +419,10 @@ async def test_wizard_partitions_per_part_skip(
     mock_deploy_service: MockDeployService,
 ) -> None:
     """Changing a partition to 'Skip' excludes it from creation."""
-    state = make_wizard_state(missing_partlabels=["disk-main-root", "disk-main-boot"])
+    state = make_wizard_state(
+        missing_partlabels=["disk-main-root", "disk-main-boot"],
+        disko_disk_overrides={"main": "/dev/sda"},
+    )
     mock_deploy_service._nix._results[
         'nixosConfigurations."test-host".config.disko.devices'
     ] = json.dumps({
@@ -439,6 +449,9 @@ async def test_wizard_partitions_per_part_skip(
         boot_sel.value = "skip"
         await pilot.pause()
         _click_button(screen, "create-deploy")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        _click_button(screen, "confirm-preview")
         await asyncio.wait_for(screen.creation_done.wait(), timeout=5)
         await pilot.pause()
         # Only root should have been created

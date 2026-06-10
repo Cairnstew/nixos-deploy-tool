@@ -84,7 +84,7 @@ async def test_partitions_create_partition_fail(mock_deploy_service: MockDeployS
     async with ScreenHarness(WizardPartitionScreen(mock_deploy_service, state)).run_test() as pilot:
         await pilot.pause()
         screen = pilot.app.screen
-        _click_button(screen, "create-deploy")
+        screen._create_selected()
         # creation_done is NOT set on error path (early return)
         await asyncio.sleep(0.5)
         await pilot.pause()
@@ -126,7 +126,7 @@ async def test_partitions_mkfs_called(mock_deploy_service: MockDeployService) ->
     async with ScreenHarness(WizardPartitionScreen(mock_deploy_service, state)).run_test() as pilot:
         await pilot.pause()
         screen = pilot.app.screen
-        _click_button(screen, "create-deploy")
+        screen._create_selected()
         await asyncio.wait_for(screen.creation_done.wait(), timeout=5)
         await pilot.pause()
         assert len(mock_deploy_service.ssh_client.mkfs_calls) == 1
@@ -229,6 +229,75 @@ async def test_partitions_auto_create_on_mount(mock_deploy_service: MockDeploySe
         await asyncio.wait_for(screen.creation_done.wait(), timeout=5)
         await pilot.pause()
         assert len(mock_deploy_service.ssh_client.created_partitions) == 1
+
+
+# ── Preview-before-create flow ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_preview_shows_predicted_paths(mock_deploy_service: MockDeployService) -> None:
+    """Clicking 'Create Selected & Deploy' probes target and shows preview."""
+    state = make_wizard_state(
+        missing_partlabels=["disk-main-root", "disk-main-boot"],
+        disko_disk_overrides={"main": "/dev/sda"},
+    )
+    mock_deploy_service._nix._results[
+        'nixosConfigurations."test-host".config.disko.devices'
+    ] = _FLAKE_RESULT
+    async with ScreenHarness(WizardPartitionScreen(mock_deploy_service, state)).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        _click_button(screen, "create-deploy")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        status = screen.query_one("#status", Static)
+        content = status._Static__content
+        assert "Partitions to create" in content
+        assert "/dev/sda1" in content or "/dev/sda" in content
+
+
+@pytest.mark.asyncio
+async def test_preview_confirm_starts_creation(mock_deploy_service: MockDeployService) -> None:
+    """Confirming preview runs the actual partition creation."""
+    state = make_wizard_state(
+        missing_partlabels=["disk-main-root"],
+        disko_disk_overrides={"main": "/dev/sda"},
+    )
+    mock_deploy_service._nix._results[
+        'nixosConfigurations."test-host".config.disko.devices'
+    ] = _FLAKE_RESULT
+    async with ScreenHarness(WizardPartitionScreen(mock_deploy_service, state)).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        _click_button(screen, "create-deploy")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        _click_button(screen, "confirm-preview")
+        await asyncio.wait_for(screen.creation_done.wait(), timeout=5)
+        await pilot.pause()
+        assert len(mock_deploy_service.ssh_client.created_partitions) == 1
+
+
+@pytest.mark.asyncio
+async def test_preview_cancel_restores_buttons(mock_deploy_service: MockDeployService) -> None:
+    """Cancelling preview restores original button row."""
+    state = make_wizard_state(
+        missing_partlabels=["disk-main-root"],
+        disko_disk_overrides={"main": "/dev/sda"},
+    )
+    mock_deploy_service._nix._results[
+        'nixosConfigurations."test-host".config.disko.devices'
+    ] = _FLAKE_RESULT
+    async with ScreenHarness(WizardPartitionScreen(mock_deploy_service, state)).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        _click_button(screen, "create-deploy")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        _click_button(screen, "cancel-preview")
+        await pilot.pause()
+        assert screen.query_one("#create-deploy", Button)
+        assert not screen.query_one("#create-deploy", Button).disabled
 
 
 # ── Back button ───────────────────────────────────────────────────

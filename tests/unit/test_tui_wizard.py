@@ -102,8 +102,11 @@ async def test_full_wizard_validation_missing_partitions(tui_app_async) -> None:
         await pilot.pause()
         assert isinstance(pilot.app.screen, WizardPartitionScreen)
 
-        # Create partitions then deploy
+        # Preview → confirm → create partitions
         _click_button(pilot.app.screen, "create-deploy")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        _click_button(pilot.app.screen, "confirm-preview")
         part_screen = pilot.app.screen
         await asyncio.wait_for(part_screen.creation_done.wait(), timeout=5)
         await pilot.pause()
@@ -312,8 +315,11 @@ async def test_full_wizard_manual_route_create_partitions(tui_app_async) -> None
         await pilot.pause()
         assert isinstance(pilot.app.screen, WizardPartitionScreen)
 
-        # Create and deploy
+        # Preview → confirm → create
         _click_button(pilot.app.screen, "create-deploy")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        _click_button(pilot.app.screen, "confirm-preview")
         part_screen = pilot.app.screen
         await asyncio.wait_for(part_screen.creation_done.wait(), timeout=5)
         await pilot.pause()

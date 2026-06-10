@@ -22,6 +22,7 @@ class WizardPartitionScreen(BaseScreen):
         self._state = state
         self.creation_done = asyncio.Event()
         self._part_choices: dict[str, str] = {}
+        self._pending_creation: list[str] = []
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -37,6 +38,7 @@ class WizardPartitionScreen(BaseScreen):
                 Button("Skip All & Deploy", id="skip-deploy", variant="default"),
                 Button("Back", id="back", variant="default"),
                 classes="button-row",
+                id="action-buttons",
             ),
             Static("", id="status"),
         )
@@ -80,7 +82,11 @@ class WizardPartitionScreen(BaseScreen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "create-deploy":
-            self._create_selected()
+            self._preview_creation()
+        elif event.button.id == "confirm-preview":
+            self._confirm_creation()
+        elif event.button.id == "cancel-preview":
+            self._cancel_preview()
         elif event.button.id == "use-flake":
             self._load_from_flake()
         elif event.button.id == "skip-deploy":
@@ -89,7 +95,7 @@ class WizardPartitionScreen(BaseScreen):
             self.app.pop_screen()
 
     def _create_selected(self) -> None:
-        """Create only the partitions marked for creation."""
+        """Create only the partitions marked for creation (no confirmation)."""
         to_create = [lbl for lbl, choice in self._part_choices.items() if choice == "create"]
         if not to_create:
             self._go_to_deploy()
@@ -100,6 +106,102 @@ class WizardPartitionScreen(BaseScreen):
         self.query_one("#status", Static).update("Creating partitions...")
         thread = threading.Thread(target=self._create_thread, args=(to_create,), daemon=True)
         thread.start()
+
+    # ── Preview & confirm creation ────────────────────────────────
+
+    def _preview_creation(self) -> None:
+        """Probe target disk and preview predicted device paths before creating."""
+        to_create = [lbl for lbl, choice in self._part_choices.items() if choice == "create"]
+        if not to_create:
+            self._go_to_deploy()
+            return
+        self._pending_creation = to_create
+        self.query_one("#create-deploy", Button).disabled = True
+        self.query_one("#skip-deploy", Button).disabled = True
+        self.query_one("#back", Button).disabled = True
+        self.query_one("#status", Static).update("Probing target disk...")
+        thread = threading.Thread(target=self._probe_thread, args=(to_create,), daemon=True)
+        thread.start()
+
+    def _probe_thread(self, to_create: list[str]) -> None:
+        """SSH into target, probe partition table, build preview of what will be created."""
+        try:
+            ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
+            devices_raw = self._svc.get_disko_devices(self._state.host_name)
+        except Exception:
+            self.app.call_from_thread(
+                self.query_one("#status", Static).update,
+                "Error: could not probe target disk",
+            )
+            self.app.call_from_thread(self._reenable_buttons)
+            return
+
+        try:
+            parts: list[str] = []
+            for disk_name, device in self._state.disko_disk_overrides.items():
+                result = ssh.run(f"sgdisk --print {device}")
+                existing: set[int] = set()
+                for line in result.stdout.split("\n"):
+                    line = line.strip()
+                    if line and line.split()[0].isdigit():
+                        existing.add(int(line.split()[0]))
+
+                next_num = 1
+                while next_num in existing:
+                    next_num += 1
+
+                disk = devices_raw.get("disk", {}).get(disk_name, {})
+                for part in (disk.get("content", {}).get("partitions", []) or []):
+                    part_name = part.get("name", "")
+                    label = f"disk-{disk_name}-{part_name}"
+                    if label in to_create:
+                        predicted = f"{device}p{next_num}" if device[-1].isdigit() else f"{device}{next_num}"
+                        fstype = part.get("content", {}).get("format", "ext4")
+                        parts.append(f"  {predicted}  →  {part_name} ({fstype})")
+                        next_num += 1
+
+            if not parts:
+                self.app.call_from_thread(
+                    self.query_one("#status", Static).update,
+                    "No partitions found to create",
+                )
+                self.app.call_from_thread(self._reenable_buttons)
+                return
+
+            text = "Partitions to create:\n" + "\n".join(parts)
+            self.app.call_from_thread(self._show_preview, text)
+        except Exception as exc:
+            self.app.call_from_thread(
+                self.query_one("#status", Static).update,
+                f"Error probing target: {exc}",
+            )
+            self.app.call_from_thread(self._reenable_buttons)
+
+    def _show_preview(self, text: str) -> None:
+        if not self._pending_creation:
+            return
+        self.query_one("#status", Static).update(text)
+        row = self.query_one("#action-buttons", Horizontal)
+        row.remove_children()
+        row.mount(Button("Confirm & Deploy", id="confirm-preview", variant="primary"))
+        row.mount(Button("Cancel", id="cancel-preview"))
+
+    def _confirm_creation(self) -> None:
+        self._restore_action_buttons()
+        self._create_selected()
+
+    def _cancel_preview(self) -> None:
+        self._pending_creation = []
+        self._restore_action_buttons()
+        self.query_one("#status", Static).update("")
+
+    def _restore_action_buttons(self) -> None:
+        row = self.query_one("#action-buttons", Horizontal)
+        row.remove_children()
+        row.mount(Button("Create Selected & Deploy", id="create-deploy", variant="primary"))
+        row.mount(Button("Use Flake Layout", id="use-flake", variant="default"))
+        row.mount(Button("Skip All & Deploy", id="skip-deploy", variant="default"))
+        row.mount(Button("Back", id="back", variant="default"))
 
     def _create_thread(self, to_create: list[str]) -> None:
         try:
