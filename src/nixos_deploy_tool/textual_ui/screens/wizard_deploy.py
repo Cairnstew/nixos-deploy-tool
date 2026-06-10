@@ -5,7 +5,6 @@ import threading
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
-from textual.screen import Screen
 from textual.widgets import Button, Label, RichLog, Static
 
 from nixos_deploy_tool.models.result import BaseResult
@@ -37,6 +36,9 @@ class WizardDeployScreen(BaseScreen):
         self._log = self.query_one("#deploy-log", RichLog)
         self._run_deploy()
 
+    def _on_output(self, line: str) -> None:
+        self.app.call_from_thread(lambda: self._log.write(line))
+
     def _run_deploy(self) -> None:
         thread = threading.Thread(target=self._deploy_thread, daemon=True)
         thread.start()
@@ -50,7 +52,7 @@ class WizardDeployScreen(BaseScreen):
             extra_args=self._state.extra_args,
             disko_mode=disko_mode,
             disk_overrides=disk_overrides,
-            on_output=lambda line: self.app.call_from_thread(self._log.write, line),
+            on_output=self._on_output,
             on_done=lambda result: self.app.call_from_thread(self._on_result, result),
         )
         self._loop.call_soon_threadsafe(self.deploy_done.set)

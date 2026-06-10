@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import threading
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Label, Select, Static
+from textual.widgets import Button, DataTable, Label, Static
 
 from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.base import BaseScreen
@@ -18,14 +20,14 @@ class WizardManualScreen(BaseScreen):
     CSS_PATH = "../styles/wizard.tcss"
 
     def __init__(self, svc: DeployService, state: WizardState,
-                 flake_devices: dict) -> None:
+                 flake_devices: dict[str, Any]) -> None:
         super().__init__()
         self._svc = svc
         self._state = state
         self._flake_devices = flake_devices.get("disk", {})
         self.disks_loaded = asyncio.Event()
-        self._target_disks: list[dict] = []
-        self._all_devices: list[dict] = []
+        self._target_disks: list[dict[str, Any]] = []
+        self._all_devices: list[dict[str, Any]] = []
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -48,9 +50,9 @@ class WizardManualScreen(BaseScreen):
         self.query_one("#continue", Button).disabled = True
         threading.Thread(target=self._load_disks_thread, daemon=True).start()
 
-    def _flatten_devices(self, disks: list[dict]) -> list[dict]:
+    def _flatten_devices(self, disks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Flatten disk + children into a flat list with a type field."""
-        flat: list[dict] = []
+        flat: list[dict[str, Any]] = []
         for disk in disks:
             flat.append({**disk, "_type": "disk"})
             for child in disk.get("children") or []:

@@ -5,14 +5,13 @@ from textual.screen import Screen
 
 from nixos_deploy_tool.cli.context import AppContext
 from nixos_deploy_tool.cli.logging import setup_logging
-from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.screens.wizard_host import WizardHostScreen
 from nixos_deploy_tool.textual_ui.wizard_state import WizardState
 
 
 class DeployToolApp(App[Screen[None]]):
     SCREENS = {
-        "wizard_host": WizardHostScreen,
+        "wizard_host": WizardHostScreen,  # type: ignore[dict-item]
     }
 
     def __init__(

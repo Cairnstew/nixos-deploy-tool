@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from nixos_deploy_tool.core._base import SubprocessRunner
@@ -10,9 +11,7 @@ class AgeRunner(SubprocessRunner):
     def __init__(self, age_bin: str = "age") -> None:
         super().__init__(age_bin)
 
-    def _wrap_error(self, exc: subprocess.CalledProcessError) -> Exception:  # type: ignore[name-defined]
-        import subprocess
-
+    def _wrap_error(self, exc: subprocess.CalledProcessError) -> Exception:
         return SecretError(f"age failed: {exc.stderr.strip()}")
 
     def decrypt(self, age_file: Path, identity: Path | None = None) -> str:

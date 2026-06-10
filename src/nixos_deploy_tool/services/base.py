@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC
+from abc import ABC, abstractmethod
 
 from nixos_deploy_tool.models.config import DeployConfig
 
@@ -11,8 +11,10 @@ class BaseService(ABC):
         self.config = config
         self.logger = logging.getLogger(self.__class__.__module__)
 
+    @abstractmethod
     def on_start(self) -> None:
-        """Override to perform setup when the service is first used."""
+        """Perform setup when the service is first used."""
 
+    @abstractmethod
     def on_stop(self) -> None:
-        """Override to perform teardown when the service is discarded."""
+        """Perform teardown when the service is discarded."""

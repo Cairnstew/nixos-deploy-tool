@@ -1,18 +1,17 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
-from nixos_deploy_tool.core._base import SubprocessRunner
-from nixos_deploy_tool.exceptions import ISOBuildError, SubprocessError
+from nixos_deploy_tool.core.nix_tool import NixTool
+from nixos_deploy_tool.exceptions import ISOBuildError
 
 
-class ISOBuilder(SubprocessRunner):
+class ISOBuilder(NixTool):
     def __init__(self, nix_bin: str = "nix") -> None:
         super().__init__(nix_bin)
 
-    def _wrap_error(self, exc: subprocess.CalledProcessError) -> Exception:  # type: ignore[name-defined]
-        import subprocess
-
+    def _wrap_error(self, exc: subprocess.CalledProcessError) -> Exception:
         return ISOBuildError(
             f"ISO build failed (exit {exc.returncode}): {exc.stderr.strip()}"
         )
@@ -23,13 +22,11 @@ class ISOBuilder(SubprocessRunner):
         iso_attr: str,
         extra_nixos_module: str | None = None,
     ) -> Path:
-        args = [
+        stdout = self._run_cmd(
             "build",
-            f"{flake_root}#{iso_attr}",
-            "--print-out-paths",
-            "--no-link",
-        ]
-        if extra_nixos_module:
-            args.extend(["--extra-nixos-module", extra_nixos_module])
-        stdout = self._run(args)
-        return Path(stdout)
+            flake=f"{flake_root}#{iso_attr}",
+            print_out_paths=True,
+            no_link=True,
+            extra_nixos_module=extra_nixos_module,
+        )
+        return self._resolve_store_path(stdout)

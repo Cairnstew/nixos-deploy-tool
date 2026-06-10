@@ -7,6 +7,12 @@ from nixos_deploy_tool.services.base import BaseService
 
 
 class PrepareService(BaseService):
+    def on_start(self) -> None:
+        pass
+
+    def on_stop(self) -> None:
+        pass
+
     def __init__(
         self,
         config: DeployConfig,
@@ -30,7 +36,7 @@ class PrepareService(BaseService):
                 f"Public key: {pubkey}",
                 "",
                 "Next steps:",
-                f"1. Add this public key to keys.groups.systems in common.nix",
+                "1. Add this public key to keys.groups.systems in common.nix",
                 "2. Run: nix develop .#secrets && agenix-manager rekey",
                 "3. Commit the rekeyed .age files",
                 f"4. Run: nixos-deploy deploy run {hostname} --addr <addr> --extra-args \"--disko-mode mount\"",

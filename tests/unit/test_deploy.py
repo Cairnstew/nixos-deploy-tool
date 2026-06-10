@@ -75,23 +75,6 @@ def test_resolve_ssh_key_falls_back_to_root_when_no_sudo_user(
     with patch.dict(os.environ, {}, clear=True):
         result = svc.resolve_ssh_key()
 
-    assert result is None
-
-
-@patch.object(Path, "expanduser", autospec=True)
-@patch.object(Path, "exists", autospec=True)
-def test_resolve_ssh_key_falls_back_to_root_when_no_sudo_user(
-    mock_exists: MagicMock, mock_expanduser: MagicMock
-) -> None:
-    mock_expanduser.side_effect = _expanduser_self
-    mock_exists.side_effect = lambda self: str(self).startswith("/root/.ssh/")
-
-    config = _make_config()
-    svc = DeployService(config)
-
-    with patch.dict(os.environ, {}, clear=True):
-        result = svc.resolve_ssh_key()
-
     assert result is not None
     assert result.startswith("/root/.ssh/")
     assert "id_ed25519" in result

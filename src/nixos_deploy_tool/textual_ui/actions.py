@@ -12,7 +12,9 @@ class RefreshMixin:
 
 
 class SelectionMixin:
-    _selected: str | None = None
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self._selected: str | None = None
 
     @property
     def selected(self) -> str | None:

@@ -62,7 +62,9 @@
 │       │   └── secrets.py        #   SecretService
 │       ├── core/
 │       │   ├── __init__.py
-│       │   ├── age.py            #   AgeWrapper — age CLI wrapper
+│       │   ├── _base.py          #   SubprocessRunner, APIClient — ABCs
+│       │   ├── nix_tool.py       #   NixTool — declarative Nix CLI base
+│       │   ├── age.py            #   AgeRunner — age CLI wrapper
 │       │   ├── flake.py          #   FlakeIntrospector — nix flake show
 │       │   ├── nix.py            #   NixRunner — nix build/eval
 │       │   ├── nixos_anywhere.py #   NixosAnywhere — nixos-anywhere wrapper
@@ -95,6 +97,7 @@
 │       │       └── main.tcss
 │       └── repositories/
 │           ├── __init__.py
+│           ├── _base.py          #   BaseRepository ABC
 │           ├── flake_repo.py     #   Discover hosts, outputs, hardware configs
 │           └── agenix_catalog.py #   Parse secrets.nix, list .age files
 │
@@ -221,10 +224,11 @@ BaseService(ABC)
 # ── Core (src/nixos_deploy_tool/core/) ────────────────────────────────────
 
 SubprocessRunner(ABC)        [core/_base.py]
-  ├── NixRunner              [core/nix.py]
-  ├── AgeRunner              [core/age.py]          (was AgeWrapper)
-  ├── ISOBuilder             [core/iso_builder.py]
-  ├── NixosAnywhere          [core/nixos_anywhere.py]
+  ├── NixTool(ABC)            [core/nix_tool.py]   — declarative Nix CLI base
+  │   ├── NixRunner           [core/nix.py]
+  │   ├── ISOBuilder          [core/iso_builder.py]
+  │   └── NixosAnywhere       [core/nixos_anywhere.py]
+  ├── AgeRunner               [core/age.py]
   └── SshClient               [core/ssh.py]
 
 APIClient(ABC)               [core/_base.py]

@@ -8,12 +8,10 @@ from typer.testing import CliRunner
 
 from nixos_deploy_tool.cli.context import AppContext
 from nixos_deploy_tool.models.config import DeployConfig
-from fixtures.factories import make_deploy_config
-from fixtures.mocks import MockDeployService, MockFlakeIntrospector, MockNixRunner
+from tests.fixtures.factories import make_deploy_config
+from tests.fixtures.mocks import MockDeployService, MockFlakeIntrospector, MockNixRunner
 
-_tests_dir = str(Path(__file__).resolve().parent)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-sys.path.insert(0, _tests_dir)
 
 
 @pytest.fixture

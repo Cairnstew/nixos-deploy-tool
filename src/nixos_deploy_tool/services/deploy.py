@@ -5,17 +5,16 @@ import os
 import shlex
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
-from collections.abc import Callable
-
-from nixos_deploy_tool.core._base import SubprocessRunner
 from nixos_deploy_tool.core.flake import FlakeIntrospector
 from nixos_deploy_tool.core.key_store import KeyStore
 from nixos_deploy_tool.core.nix import NixRunner
 from nixos_deploy_tool.core.nixos_anywhere import NixosAnywhere
-from nixos_deploy_tool.core.ssh import SshClient
+from nixos_deploy_tool.core.ssh import SshClient, SshProtocol
 from nixos_deploy_tool.exceptions import NixEvalError
-from nixos_deploy_tool.models.config import DeployConfig
+
+from nixos_deploy_tool.models.config import DeployConfig, normalise_partitions
 from nixos_deploy_tool.models.result import BaseResult, ErrorResult, SuccessResult
 from nixos_deploy_tool.services.base import BaseService
 
@@ -28,7 +27,7 @@ class DeployService(BaseService):
         flake: FlakeIntrospector | None = None,
         nix_runner: NixRunner | None = None,
         key_store: KeyStore | None = None,
-        ssh_factory: Callable[[str, str | None], SubprocessRunner] | None = None,
+        ssh_factory: Callable[[str, str | None], SshProtocol] | None = None,
     ) -> None:
         super().__init__(config)
         if not config.flake_root:
@@ -43,33 +42,33 @@ class DeployService(BaseService):
         self._key_store = key_store or KeyStore()
         self._ssh_factory = ssh_factory or (lambda target, key: SshClient(target, key))
 
+    def on_start(self) -> None:
+        pass
+
+    def on_stop(self) -> None:
+        pass
+
     # ── Public API ──────────────────────────────────────────────────
 
-    def create_ssh(self, target: str, ssh_key: str | None = None) -> SubprocessRunner:
+    def create_ssh(self, target: str, ssh_key: str | None = None) -> SshProtocol:
         return self._ssh_factory(target, ssh_key)
 
     def list_hosts(self) -> list[dict[str, str]]:
         """List available host configurations from the flake."""
         return self._flake.list_host_configs()
 
-    def get_disko_devices(self, host_name: str) -> dict:
+    def get_disko_devices(self, host_name: str) -> dict[str, Any]:
         """Evaluate and return the disko devices config for a host."""
         raw = self._nix.eval_flake_json(
             f'nixosConfigurations."{host_name}".config.disko.devices',
             self._flake_root,
         )
-        return json.loads(raw)
+        return cast("dict[str, Any]", json.loads(raw))
 
     @staticmethod
-    def _parse_partition_names(disk_content: dict) -> list[str]:
-        """Extract partition names from a disko content block.
-
-        Supports both dict-keyed (gpt) and list-style partitions.
-        """
-        partitions = disk_content.get("partitions") or {}
-        if isinstance(partitions, dict):
-            return [p.get("name", name) for name, p in partitions.items()]
-        return [p.get("name", "") for p in partitions if p.get("name")]
+    def _parse_partition_names(disk_content: dict[str, Any]) -> list[str]:
+        """Extract partition names from a disko content block."""
+        return [p.get("name", "") for p in normalise_partitions(disk_content) if p.get("name")]
 
     def get_disko_summary(self, host_name: str) -> str:
         """Return a human-readable summary of the disko config."""
@@ -182,7 +181,8 @@ class DeployService(BaseService):
             if self.config.skip_disko:
                 args.extend(["--phases", "kexec,install,reboot"])
             else:
-                args.extend(["--disko-mode", self.config.disko_mode])  # type: ignore[arg-type]
+                dm = self.config.disko_mode or ""
+                args.extend(["--disko-mode", dm])
 
         elif self.config.auto_detect_disko:
             try:
@@ -352,6 +352,52 @@ class DeployService(BaseService):
 
     # ── High-level operations ──────────────────────────────────────
 
+    def _deploy_nixos_anywhere(
+        self,
+        host: str,
+        target: str,
+        extra_args: list[str],
+        ssh_key: str | None = None,
+        extra_files: Path | None = None,
+    ) -> None:
+        attr = self.resolve_host_attr(host)
+        self._nixos_anywhere.deploy(
+            target=target,
+            flake_attr=attr,
+            flake_root=self._flake_root,
+            ssh_key=ssh_key,
+            extra_args=extra_args,
+            extra_files=extra_files,
+        )
+
+    def _run_deploy_op(
+        self,
+        host: str,
+        addr: str | None = None,
+        extra_args: str | None = None,
+        disk_overrides: dict[str, str] | None = None,
+        disko_mode: str = "auto",
+        *,
+        ssh_key: str | None = None,
+        log_label: str = "Deploy",
+        success_msg: str | None = None,
+    ) -> BaseResult:
+        target = addr or host
+        self.logger.info("%s to %s (addr=%s)", log_label, host, addr or "auto")
+        try:
+            self._deploy_nixos_anywhere(
+                host=host,
+                target=target,
+                extra_args=self.build_extra_args(host, extra_args, disko_mode=disko_mode,
+                                                  disk_overrides=disk_overrides),
+                ssh_key=ssh_key or self.resolve_ssh_key(),
+                extra_files=self.resolve_extra_files(host),
+            )
+            msg = success_msg or f"{log_label} completed for {host}."
+            return SuccessResult(message=msg)
+        except Exception as exc:
+            return ErrorResult(message=f"{log_label} failed: {exc}")
+
     def run(
         self,
         host: str,
@@ -360,36 +406,18 @@ class DeployService(BaseService):
         disk_overrides: dict[str, str] | None = None,
         disko_mode: str = "auto",
     ) -> BaseResult:
-        self.logger.info("Deploying to %s (addr=%s)", host, addr or "auto")
-        try:
-            target = addr or host
-            attr = self.resolve_host_attr(host)
-            self._nixos_anywhere.deploy(
-                target=target,
-                flake_attr=attr,
-                flake_root=self._flake_root,
-                extra_args=self.build_extra_args(host, extra_args, disko_mode=disko_mode,
-                                                  disk_overrides=disk_overrides),
-                extra_files=self.resolve_extra_files(host),
-            )
-            return SuccessResult(message=f"Deployed {host}.")
-        except Exception as exc:
-            return ErrorResult(message=f"Deploy failed: {exc}")
+        return self._run_deploy_op(
+            host, addr=addr, extra_args=extra_args,
+            disk_overrides=disk_overrides, disko_mode=disko_mode,
+            ssh_key=None, log_label="Deploy",
+        )
 
     def wizard(self, host: str, addr: str | None = None, extra_args: str | None = None) -> BaseResult:
-        self.logger.info("Running deploy wizard for %s (addr=%s)", host, addr or "auto")
-        try:
-            target = addr or host
-            attr = self.resolve_host_attr(host)
-            self._nixos_anywhere.deploy(
-                target=target,
-                flake_attr=attr,
-                flake_root=self._flake_root,
-                extra_args=self.build_extra_args(host, extra_args),
-            )
-            return SuccessResult(message=f"Wizard completed for {host}.")
-        except Exception as exc:
-            return ErrorResult(message=f"Wizard failed: {exc}")
+        return self._run_deploy_op(
+            host, addr=addr, extra_args=extra_args,
+            ssh_key=None, log_label="Wizard",
+            success_msg=f"Wizard completed for {host}.",
+        )
 
     def with_keys(
         self,
@@ -399,23 +427,12 @@ class DeployService(BaseService):
         disk_overrides: dict[str, str] | None = None,
         disko_mode: str = "auto",
     ) -> BaseResult:
-        self.logger.info("Deploying with keys to %s (addr=%s)", host, addr or "auto")
-        try:
-            attr = self.resolve_host_attr(host)
-            target = addr or host
-            ssh_key = self.resolve_ssh_key()
-            self._nixos_anywhere.deploy(
-                target=target,
-                flake_attr=attr,
-                flake_root=self._flake_root,
-                ssh_key=ssh_key,
-                extra_args=self.build_extra_args(host, extra_args, disko_mode=disko_mode,
-                                                  disk_overrides=disk_overrides),
-                extra_files=self.resolve_extra_files(host),
-            )
-            return SuccessResult(message=f"Deployed {host} with keys.")
-        except Exception as exc:
-            return ErrorResult(message=f"Deploy with keys failed: {exc}")
+        return self._run_deploy_op(
+            host, addr=addr, extra_args=extra_args,
+            disk_overrides=disk_overrides, disko_mode=disko_mode,
+            ssh_key=self.resolve_ssh_key(), log_label="Deploy with keys",
+            success_msg=f"Deployed {host} with keys.",
+        )
 
     def test(self, host: str) -> BaseResult:
         self.logger.info("VM-testing host config: %s", host)

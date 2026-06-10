@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import threading
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Input, Label, RadioSet, RadioButton, Select, Static
@@ -25,7 +27,7 @@ class WizardConfigScreen(BaseScreen):
         self._svc = svc
         self._state = state
         self.validation_done = asyncio.Event()
-        self._stashed_devices: dict | None = None
+        self._stashed_devices: dict[str, Any] | None = None
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -138,7 +140,7 @@ class WizardConfigScreen(BaseScreen):
         extra_input = self.query_one("#extra-args-input", Input)
         self._state.extra_args = extra_input.value or None
         mode_select = self.query_one("#mode-select", RadioSet)
-        pressed_id = mode_select.pressed_button.id if mode_select.pressed_button else "mode-auto"
+        pressed_id = str(mode_select.pressed_button.id) if mode_select.pressed_button else "mode-auto"
         mode_map = {
             "mode-auto": "auto",
             "mode-mount": "mount",

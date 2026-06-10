@@ -7,6 +7,7 @@ from nixos_deploy_tool.core.flake import FlakeIntrospector
 from nixos_deploy_tool.core.iso_builder import ISOBuilder
 from nixos_deploy_tool.models.config import DeployConfig, ISOConfig, SecretInjection
 from nixos_deploy_tool.models.result import BaseResult, ErrorResult, SuccessResult
+from nixos_deploy_tool.repositories.agenix_catalog import AgenixCatalog
 from nixos_deploy_tool.services.base import BaseService
 
 
@@ -27,6 +28,12 @@ class ISOService(BaseService):
         self._flake = flake or FlakeIntrospector(flake_root)
         self._age = age or AgeRunner(age_bin=config.paths.age_bin or "age")
 
+    def on_start(self) -> None:
+        pass
+
+    def on_stop(self) -> None:
+        pass
+
     def list_isos(self) -> list[ISOConfig]:
         raw = self._flake.list_iso_configs()
         return [ISOConfig(name=str(item["name"]), flake_attr=str(item["attr"])) for item in raw]
@@ -44,8 +51,6 @@ class ISOService(BaseService):
 
     def rotate_keys(self, name: str) -> BaseResult:
         self.logger.info("Rotating keys for ISO: %s", name)
-        from nixos_deploy_tool.repositories.agenix_catalog import AgenixCatalog
-
         catalog = AgenixCatalog(self._flake_root, self.config.secrets_dir)
         age_files = catalog.list_age_files()
         if not age_files:

@@ -6,7 +6,7 @@ from typing import Any, cast
 import httpx
 
 from nixos_deploy_tool.core._base import APIClient
-from nixos_deploy_tool.exceptions import APIError, TailscaleAPIError
+from nixos_deploy_tool.exceptions import TailscaleAPIError
 
 
 class TailscaleAPIClient(APIClient):

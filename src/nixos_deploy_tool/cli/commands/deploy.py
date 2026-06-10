@@ -5,6 +5,7 @@ import typer
 from nixos_deploy_tool.cli.commands.base import BaseCommand
 from nixos_deploy_tool.cli.context import AppContext
 from nixos_deploy_tool.models.result import BaseResult
+from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.app import run_tui
 
 app = typer.Typer()
@@ -22,25 +23,20 @@ def _parse_disk_overrides(disk_args: list[str]) -> dict[str, str]:
     return overrides
 
 
-def _confirm_disks(svc: object, host_name: str, addr: str | None,
+def _confirm_disks(svc: DeployService, host_name: str, addr: str | None,
                    disk_overrides: dict[str, str] | None, yes: bool) -> None:
     """Show disko summary + partition preview and prompt for confirmation."""
-    from nixos_deploy_tool.services.deploy import DeployService
-
-    svc_typed = svc
-    if not isinstance(svc_typed, DeployService):
-        return
     target = addr or host_name
     try:
-        summary = svc_typed.get_disko_summary(host_name)
+        summary = svc.get_disko_summary(host_name)
         if summary and "No disko devices" not in summary:
             typer.echo(f"\nDisko configuration for {host_name}:")
             typer.echo(f"  {summary}")
     except Exception:
         typer.echo("(could not evaluate disko config to display target devices)")
     try:
-        preview = svc_typed.preview_partitions(
-            host_name, target, svc_typed.resolve_ssh_key(), disk_overrides,
+        preview = svc.preview_partitions(
+            host_name, target, svc.resolve_ssh_key(), disk_overrides,
         )
         if preview:
             typer.echo(f"\n{preview}")
@@ -51,7 +47,9 @@ def _confirm_disks(svc: object, host_name: str, addr: str | None,
         typer.confirm("This may DESTROY DATA on the target device(s). Proceed?", abort=True)
 
 
-class DeployRunCommand(BaseCommand):
+class _BaseDeployCommand(BaseCommand):
+    """Base for deploy commands that share host/addr/extra_args/disko_mode constructor params."""
+
     def __init__(
         self,
         ctx: AppContext,
@@ -70,11 +68,13 @@ class DeployRunCommand(BaseCommand):
         self.disko_mode = disko_mode
         self.yes = yes
 
+
+class DeployRunCommand(_BaseDeployCommand):
     def run(self) -> BaseResult:
         svc = self.ctx._get_deploy_service()
         _confirm_disks(svc, self.host, self.addr, self.disk_overrides, self.yes)
         return svc.run(self.host, self.addr, self.extra_args,
-                       disk_overrides=self.disk_overrides, disko_mode=self.disko_mode)
+                        disk_overrides=self.disk_overrides, disko_mode=self.disko_mode)
 
 
 class DeployWizardCommand(BaseCommand):
@@ -95,25 +95,7 @@ class DeployWizardCommand(BaseCommand):
         return svc.wizard(self.host, self.addr, self.extra_args)
 
 
-class DeployWithKeysCommand(BaseCommand):
-    def __init__(
-        self,
-        ctx: AppContext,
-        host: str = "",
-        addr: str | None = None,
-        extra_args: str | None = None,
-        disk_overrides: dict[str, str] | None = None,
-        disko_mode: str = "auto",
-        yes: bool = False,
-    ) -> None:
-        super().__init__(ctx)
-        self.host = host
-        self.addr = addr
-        self.extra_args = extra_args
-        self.disk_overrides = disk_overrides
-        self.disko_mode = disko_mode
-        self.yes = yes
-
+class DeployWithKeysCommand(_BaseDeployCommand):
     def run(self) -> BaseResult:
         svc = self.ctx._get_deploy_service()
         _confirm_disks(svc, self.host, self.addr, self.disk_overrides, self.yes)

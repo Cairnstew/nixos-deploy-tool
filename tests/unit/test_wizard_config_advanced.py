@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import threading
 
 import pytest
-from textual.containers import Vertical
-from textual.widgets import Button, Input, RadioSet, Select, Static
+from textual.widgets import Button, Input, Static
 
 from nixos_deploy_tool.textual_ui.screens.wizard_config import WizardConfigScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
@@ -26,14 +24,6 @@ def _click_button(screen, button_id: str) -> None:
 @pytest.mark.asyncio
 async def test_config_mode_map_logic(mock_deploy_service: MockDeployService) -> None:
     """Directly test the mode_map used in on_button_pressed."""
-    # The mode_map logic is:
-    #   pressed_id = mode_select.pressed_button.id if mode_select.pressed_button else "mode-auto"
-    #   mode_map = {"mode-auto": "auto", "mode-mount": "mount", "mode-create": "create", "mode-skip": "skip"}
-    #   state.disko_mode = mode_map.get(pressed_id, "auto")
-    # Test that all four modes map correctly
-    from nixos_deploy_tool.textual_ui.screens.wizard_config import WizardConfigScreen
-
-    screen = WizardConfigScreen(mock_deploy_service, make_wizard_state())
     mode_map = {
         "mode-auto": "auto",
         "mode-mount": "mount",
@@ -107,9 +97,9 @@ async def test_config_vadation_error_reenables_buttons(
 
     mock_deploy_service.ssh_client.partition_exists = raise_error
     # Register a disko result so eval succeeds but partition check fails
-    mock_deploy_service._nix._results[
-        'nixosConfigurations."test-host".config.disko.devices'
-    ] = '{"disk": {"main": {"device": "/dev/sda", "content": {"partitions": [{"name": "root"}]}}}}'
+    mock_deploy_service._nix._results['nixosConfigurations."test-host".config.disko.devices'] = (
+        '{"disk": {"main": {"device": "/dev/sda", "content": {"partitions": [{"name": "root"}]}}}}'
+    )
 
     async with ScreenHarness(WizardConfigScreen(mock_deploy_service, state)).run_test() as pilot:
         await pilot.pause()
@@ -130,9 +120,9 @@ async def test_config_validaiton_error_message(
 ) -> None:
     """Outer exception handler shows validation error."""
     state = make_wizard_state()
-    mock_deploy_service._nix._results[
-        'nixosConfigurations."test-host".config.disko.devices'
-    ] = 'not json'
+    mock_deploy_service._nix._results['nixosConfigurations."test-host".config.disko.devices'] = (
+        "not json"
+    )
 
     async with ScreenHarness(WizardConfigScreen(mock_deploy_service, state)).run_test() as pilot:
         await pilot.pause()
@@ -141,4 +131,5 @@ async def test_config_validaiton_error_message(
         await asyncio.wait_for(screen.validation_done.wait(), timeout=5)
         await pilot.pause()
         status = screen.query_one("#status", Static)
-        assert "validation" in status._Static__content.lower() or "error" in status._Static__content.lower()
+        content = status._Static__content.lower()
+        assert "validation" in content or "error" in content

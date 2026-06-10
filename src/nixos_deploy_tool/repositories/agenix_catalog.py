@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from nixos_deploy_tool.exceptions import SecretError
-from nixos_deploy_tool.repositories import BaseRepository
+from nixos_deploy_tool.repositories._base import BaseRepository
 
 
 class AgenixCatalog(BaseRepository):

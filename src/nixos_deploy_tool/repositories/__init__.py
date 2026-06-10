@@ -1,14 +1,7 @@
-from __future__ import annotations
+from nixos_deploy_tool.repositories._base import BaseRepository
+from nixos_deploy_tool.repositories.agenix_catalog import AgenixCatalog
 
-from abc import ABC, abstractmethod
-from typing import Any
-
-
-class BaseRepository(ABC):
-    @abstractmethod
-    def list(self) -> list[dict[str, Any]]:
-        ...
-
-    @abstractmethod
-    def get(self, key: str) -> dict[str, Any] | None:
-        ...
+__all__ = [
+    "AgenixCatalog",
+    "BaseRepository",
+]

@@ -7,6 +7,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Label, Select, Static
 
+from nixos_deploy_tool.models.config import normalise_partitions
 from nixos_deploy_tool.services.deploy import DeployService
 from nixos_deploy_tool.textual_ui.base import BaseScreen
 from nixos_deploy_tool.textual_ui.screens.wizard_deploy import WizardDeployScreen
@@ -23,19 +24,6 @@ class WizardPartitionScreen(BaseScreen):
         self.creation_done = asyncio.Event()
         self._part_choices: dict[str, str] = {}
         self._pending_creation: list[str] = []
-
-    @staticmethod
-    def _normalise_partitions(content: dict) -> list[dict]:
-        """Return a list of partition dicts regardless of input format.
-
-        Disko supports both dict-keyed partitions (``{ name = {...}; }``)
-        and list-style partitions (``[ { name = "..."; } ]``).  Normalise
-        to a list so callers can always iterate with ``for part in ...``.
-        """
-        raw = content.get("partitions") or {}
-        if isinstance(raw, dict):
-            return [{"name": k, **(v if isinstance(v, dict) else {})} for k, v in raw.items()]
-        return [p for p in raw if isinstance(p, dict) and p.get("name")]
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -162,7 +150,7 @@ class WizardPartitionScreen(BaseScreen):
                 next_num = 1
 
                 disk = devices_raw.get("disk", {}).get(disk_name, {})
-                for part in self._normalise_partitions(disk.get("content", {})):
+                for part in normalise_partitions(disk.get("content", {})):
                     part_name = part.get("name", "")
                     label = f"disk-{disk_name}-{part_name}"
                     if label in to_create:
@@ -230,7 +218,7 @@ class WizardPartitionScreen(BaseScreen):
         ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
         for disk_name, disk in devices_raw.get("disk", {}).items():
             device = self._state.disko_disk_overrides.get(disk_name, disk.get("device", ""))
-            for part in self._normalise_partitions(disk.get("content", {})):
+            for part in normalise_partitions(disk.get("content", {})):
                 part_name = part.get("name", "")
                 label = f"disk-{disk_name}-{part_name}"
                 if label in to_create:
@@ -285,7 +273,7 @@ class WizardPartitionScreen(BaseScreen):
         for name, disk in devices_raw.get("disk", {}).items():
             if disk_name and name != disk_name:
                 continue
-            for part in self._normalise_partitions(disk.get("content", {})):
+            for part in normalise_partitions(disk.get("content", {})):
                 pname = part.get("name", "")
                 label = f"disk-{name}-{pname}"
                 missing.append(label)

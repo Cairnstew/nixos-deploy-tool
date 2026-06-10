@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 from nixos_deploy_tool.core._base import SubprocessRunner
 from nixos_deploy_tool.core.flake import FlakeIntrospector
 from nixos_deploy_tool.core.nix import NixRunner
-from fixtures.factories import make_deploy_config
-from fixtures.mock_ssh import MockSshClient
+from tests.fixtures.factories import make_deploy_config
+from tests.fixtures.mock_ssh import MockSshClient
 from nixos_deploy_tool.services.deploy import DeployService
 
 

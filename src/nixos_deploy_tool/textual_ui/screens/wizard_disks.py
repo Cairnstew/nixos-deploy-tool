@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import threading
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, DataTable, Label, Select, Static
@@ -18,14 +20,14 @@ class WizardDiskScreen(BaseScreen):
     CSS_PATH = "../styles/wizard.tcss"
 
     def __init__(self, svc: DeployService, state: WizardState,
-                 flake_devices: dict) -> None:
+                 flake_devices: dict[str, Any]) -> None:
         super().__init__()
         self._svc = svc
         self._state = state
         self._flake_devices = flake_devices.get("disk", {})
         self.disks_loaded = asyncio.Event()
-        self._target_disks: list[dict] = []
-        self._selectors: list[Select] = []
+        self._target_disks: list[dict[str, Any]] = []
+        self._selectors: list[Select[Any]] = []
 
     def compose_content(self) -> ComposeResult:
         yield Vertical(
@@ -131,7 +133,7 @@ class WizardDiskScreen(BaseScreen):
     def _store_selections_and_advance(self) -> None:
         self._state.disko_disk_overrides = {}
         for sel in self._selectors:
-            disk_name = sel.id.replace("disk-map-", "")
+            disk_name = (sel.id or "").replace("disk-map-", "")
             if sel.value:
                 self._state.disko_disk_overrides[disk_name] = str(sel.value)
 

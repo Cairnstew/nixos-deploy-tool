@@ -2,10 +2,24 @@ from __future__ import annotations
 
 import json
 import subprocess
-from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 from nixos_deploy_tool.core._base import SubprocessRunner
 from nixos_deploy_tool.exceptions import SubprocessError
+
+
+@runtime_checkable
+class SshProtocol(Protocol):
+    """Protocol for SSH client operations used by TUI wizard screens."""
+
+    def run(
+        self, command: str, check: bool = True, timeout: int = 30
+    ) -> subprocess.CompletedProcess[str]: ...
+    def partition_exists(self, partlabel: str) -> bool: ...
+    def list_disks(self) -> list[dict[str, object]]: ...
+    def create_partition(self, device: str, label: str) -> None: ...
+    def mkfs(self, device_path: str, fstype: str, label: str) -> None: ...
+    def path_for_partlabel(self, partlabel: str) -> str | None: ...
 
 
 class SshClient(SubprocessRunner):

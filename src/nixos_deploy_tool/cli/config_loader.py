@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from nixos_deploy_tool.models.config import DeployConfig
 

@@ -4,6 +4,7 @@ import logging
 import subprocess
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
+from typing import Any
 
 
 class SubprocessRunner(ABC):
@@ -25,7 +26,7 @@ class SubprocessRunner(ABC):
         args: Sequence[str],
         input: str | None = None,
         timeout: int = 300,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> str:
         cmd = [self.binary, *args]
         self.logger.debug("Running: %s", " ".join(cmd))
@@ -42,7 +43,7 @@ class SubprocessRunner(ABC):
                 raise subprocess.CalledProcessError(
                     result.returncode, cmd, result.stdout, result.stderr
                 )
-            return result.stdout.strip()
+            return (result.stdout or "").strip()
         except subprocess.CalledProcessError as exc:
             raise self._wrap_error(exc) from exc
 
@@ -51,7 +52,7 @@ class SubprocessRunner(ABC):
         args: Sequence[str],
         on_output: Callable[[str], None] | None = None,
         on_done: Callable[[int], None] | None = None,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> int:
         cmd = [self.binary, *args]
         self.logger.info("Running: %s", " ".join(cmd))
@@ -72,15 +73,13 @@ class SubprocessRunner(ABC):
                         if on_output:
                             on_output(stripped)
                 proc.wait()
-                returncode = proc.returncode
+                returncode = proc.returncode if proc.returncode is not None else -1
                 self.logger.info("Command completed (exit %d)", returncode)
                 if returncode != 0:
                     output = "\n".join(lines[-50:])
                     raise subprocess.CalledProcessError(
                         returncode, cmd, output, output
                     )
-        except subprocess.CalledProcessError:
-            raise
         except Exception as exc:
             self.logger.error("Streaming run failed: %s", exc)
             returncode = -1

@@ -10,6 +10,12 @@ from nixos_deploy_tool.services.base import BaseService
 
 
 class SecretService(BaseService):
+    def on_start(self) -> None:
+        pass
+
+    def on_stop(self) -> None:
+        pass
+
     def __init__(
         self,
         config: DeployConfig,
