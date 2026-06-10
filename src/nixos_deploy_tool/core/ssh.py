@@ -34,7 +34,7 @@ class SshClient(SubprocessRunner):
         self, command: str, check: bool = True, timeout: int = 30
     ) -> subprocess.CompletedProcess[str]:
         full_cmd = [self.binary, *self._base_args(), command]
-        self.logger.debug("Running: ssh ... %s", command)
+        self.logger.info("SSH: %s", command)
         result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout)
         if check and result.returncode != 0:
             raise SubprocessError(

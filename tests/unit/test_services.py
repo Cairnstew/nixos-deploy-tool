@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -349,3 +350,39 @@ def test_secret_service_list() -> None:
     svc = SecretService(_cfg())
     secrets = svc.list_secrets()
     assert secrets == []
+
+
+def test_preview_partitions_returns_preview() -> None:
+    import subprocess
+    svc = DeployService(_cfg())
+    mock_ssh = MagicMock()
+    mock_ssh.run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout="", stderr="",
+    )
+    with patch("nixos_deploy_tool.services.deploy.SshClient", return_value=mock_ssh):
+        svc.get_disko_devices = MagicMock(return_value={
+            "disk": {
+                "main": {
+                    "device": "/dev/sda",
+                    "content": {
+                        "partitions": [
+                            {"name": "root", "content": {"format": "ext4"}},
+                        ],
+                    },
+                },
+            },
+        })
+        svc.resolve_ssh_key = MagicMock(return_value=None)
+        result = svc.preview_partitions(
+            "test-host", "nixos@host", ssh_key=None,
+            disk_overrides={"main": "/dev/sda"},
+        )
+        assert "root" in result
+        assert "Partitions to create" in result
+
+
+def test_preview_partitions_empty_when_no_devices() -> None:
+    svc = DeployService(_cfg())
+    svc.get_disko_devices = MagicMock(side_effect=RuntimeError("no disko"))
+    result = svc.preview_partitions("test-host", "nixos@host")
+    assert result == ""

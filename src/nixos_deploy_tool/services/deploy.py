@@ -301,6 +301,55 @@ class DeployService(BaseService):
             on_done(result)
         return result
 
+    # ── Partition preview for CLI ──────────────────────────────────
+
+    def preview_partitions(
+        self,
+        host: str,
+        target: str,
+        ssh_key: str | None = None,
+        disk_overrides: dict[str, str] | None = None,
+    ) -> str:
+        """Evaluate disko config, probe target disk, predict device paths.
+
+        Returns a human-readable preview string (or empty if no partitions).
+        Logs the preview at INFO level.
+        """
+        try:
+            devices = self.get_disko_devices(host)
+        except Exception:
+            return ""
+        overrides = disk_overrides or {}
+        try:
+            ssh = SshClient(target, ssh_key)
+            lines: list[str] = []
+            for disk_name, disk in devices.get("disk", {}).items():
+                device = overrides.get(disk_name, disk.get("device", ""))
+                if not device:
+                    continue
+                result = ssh.run(f"sgdisk --print {device}")
+                existing: set[int] = set()
+                for line in result.stdout.split("\n"):
+                    stripped = line.strip()
+                    if stripped and stripped.split()[0].isdigit():
+                        existing.add(int(stripped.split()[0]))
+                next_num = 1
+                while next_num in existing:
+                    next_num += 1
+                for part in (disk.get("content", {}).get("partitions", []) or []):
+                    part_name = part.get("name", "")
+                    predicted = f"{device}p{next_num}" if device[-1].isdigit() else f"{device}{next_num}"
+                    fstype = part.get("content", {}).get("format", "ext4")
+                    lines.append(f"  {predicted}  →  {part_name} ({fstype})")
+                    next_num += 1
+            if lines:
+                text = "Partitions to create:\n" + "\n".join(lines)
+                self.logger.info("\n%s", text)
+                return text
+        except Exception:
+            self.logger.warning("Could not probe target for partition preview", exc_info=True)
+        return ""
+
     # ── High-level operations ──────────────────────────────────────
 
     def run(

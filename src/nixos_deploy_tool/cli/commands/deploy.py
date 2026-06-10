@@ -22,13 +22,15 @@ def _parse_disk_overrides(disk_args: list[str]) -> dict[str, str]:
     return overrides
 
 
-def _confirm_disks(svc: object, host_name: str, yes: bool) -> None:
-    """Show disko summary and prompt for confirmation before destructive deploy."""
+def _confirm_disks(svc: object, host_name: str, addr: str | None,
+                   disk_overrides: dict[str, str] | None, yes: bool) -> None:
+    """Show disko summary + partition preview and prompt for confirmation."""
     from nixos_deploy_tool.services.deploy import DeployService
 
-    svc_typed = svc  # keep type checker happy
+    svc_typed = svc
     if not isinstance(svc_typed, DeployService):
         return
+    target = addr or host_name
     try:
         summary = svc_typed.get_disko_summary(host_name)
         if summary and "No disko devices" not in summary:
@@ -36,7 +38,16 @@ def _confirm_disks(svc: object, host_name: str, yes: bool) -> None:
             typer.echo(f"  {summary}")
     except Exception:
         typer.echo("(could not evaluate disko config to display target devices)")
+    try:
+        preview = svc_typed.preview_partitions(
+            host_name, target, svc_typed.resolve_ssh_key(), disk_overrides,
+        )
+        if preview:
+            typer.echo(f"\n{preview}")
+    except Exception:
+        pass
     if not yes:
+        typer.echo("")
         typer.confirm("This may DESTROY DATA on the target device(s). Proceed?", abort=True)
 
 
@@ -61,7 +72,7 @@ class DeployRunCommand(BaseCommand):
 
     def run(self) -> BaseResult:
         svc = self.ctx._get_deploy_service()
-        _confirm_disks(svc, self.host, self.yes)
+        _confirm_disks(svc, self.host, self.addr, self.disk_overrides, self.yes)
         return svc.run(self.host, self.addr, self.extra_args,
                        disk_overrides=self.disk_overrides, disko_mode=self.disko_mode)
 
@@ -105,7 +116,7 @@ class DeployWithKeysCommand(BaseCommand):
 
     def run(self) -> BaseResult:
         svc = self.ctx._get_deploy_service()
-        _confirm_disks(svc, self.host, self.yes)
+        _confirm_disks(svc, self.host, self.addr, self.disk_overrides, self.yes)
         return svc.with_keys(self.host, self.addr, self.extra_args,
                              disk_overrides=self.disk_overrides, disko_mode=self.disko_mode)
 
