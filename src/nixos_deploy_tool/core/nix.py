@@ -43,7 +43,7 @@ class NixRunner(NixTool):
         args = self._build_command("eval", json=True, expr=expr)
         if flake_root:
             args.extend(["--option", "flake", str(flake_root)])
-        return self._run(args, timeout=120)
+        return self._run(args[1:], timeout=120)
 
     def eval_flake_json(self, attr: str, flake_root: Path) -> str:
         exp = self._build_strip_expr(attr, flake_root)
@@ -54,7 +54,7 @@ class NixRunner(NixTool):
             expr=exp,
         )
         try:
-            return self._run(args, timeout=120)
+            return self._run(args[1:], timeout=120)
         except SubprocessError as exc:
             raise NixEvalError(str(exc)) from exc
 
