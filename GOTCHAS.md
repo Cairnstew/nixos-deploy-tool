@@ -70,3 +70,25 @@ Use v3, not v2. v2 has broken `changes-file` output on newer runner images.
 ### Flake lock drift
 After changing flake inputs, run `nix flake lock` to update `flake.lock`. Otherwise you'll silently
 use the old pinned versions.
+
+## TUI / disko
+
+### Dict-keyed partitions iterate as keys, not partition objects
+Disko partition configs are Nix attrsets that deserialise to JSON dictionaries. In Python,
+``for part in disk["content"]["partitions"]`` iterates over **dict keys** (strings) when the
+config uses the attrset/gpt style, not partition dicts. Calling ``part.get("name")`` on a
+string raises ``AttributeError`` — which ``except RuntimeError`` does **not** catch — so the
+worker thread dies silently and the screen hangs with ``creation_done`` never set.
+
+The canonical fix is ``_normalise_partitions()`` in ``wizard_partitions.py``. Use it
+anywhere you traverse ``partitions`` from a disko JSON payload.
+
+Two code paths were affected:
+- ``wizard_partitions.py`` — ``_create_thread``, ``_probe_thread``, ``_load_from_flake_thread``
+  (thread-hang, no error visible to user)
+- ``wizard_manual.py`` — ``_update_planned_layout`` (display-only, shows garbled preview)
+
+### ``except RuntimeError`` is too narrow for worker threads
+Worker threads in ``_create_thread`` that hit ``AttributeError`` or other non-RuntimeError
+exceptions die silently because ``except RuntimeError`` doesn't catch them. Always catch
+``Exception`` in thread-level error handlers that surface status to the user.

@@ -24,6 +24,19 @@ class WizardPartitionScreen(BaseScreen):
         self._part_choices: dict[str, str] = {}
         self._pending_creation: list[str] = []
 
+    @staticmethod
+    def _normalise_partitions(content: dict) -> list[dict]:
+        """Return a list of partition dicts regardless of input format.
+
+        Disko supports both dict-keyed partitions (``{ name = {...}; }``)
+        and list-style partitions (``[ { name = "..."; } ]``).  Normalise
+        to a list so callers can always iterate with ``for part in ...``.
+        """
+        raw = content.get("partitions") or {}
+        if isinstance(raw, dict):
+            return [{"name": k, **(v if isinstance(v, dict) else {})} for k, v in raw.items()]
+        return [p for p in raw if isinstance(p, dict) and p.get("name")]
+
     def compose_content(self) -> ComposeResult:
         yield Vertical(
             Label("Partition Configuration", classes="title"),
@@ -147,14 +160,14 @@ class WizardPartitionScreen(BaseScreen):
                         existing.add(int(line.split()[0]))
 
                 next_num = 1
-                while next_num in existing:
-                    next_num += 1
 
                 disk = devices_raw.get("disk", {}).get(disk_name, {})
-                for part in (disk.get("content", {}).get("partitions", []) or []):
+                for part in self._normalise_partitions(disk.get("content", {})):
                     part_name = part.get("name", "")
                     label = f"disk-{disk_name}-{part_name}"
                     if label in to_create:
+                        while next_num in existing:
+                            next_num += 1
                         predicted = f"{device}p{next_num}" if device[-1].isdigit() else f"{device}{next_num}"
                         fstype = part.get("content", {}).get("format", "ext4")
                         parts.append(f"  {predicted}  →  {part_name} ({fstype})")
@@ -217,7 +230,7 @@ class WizardPartitionScreen(BaseScreen):
         ssh = self._svc.create_ssh(self._state.ssh_target, self._state.ssh_key)
         for disk_name, disk in devices_raw.get("disk", {}).items():
             device = self._state.disko_disk_overrides.get(disk_name, disk.get("device", ""))
-            for part in (disk.get("content", {}).get("partitions", []) or []):
+            for part in self._normalise_partitions(disk.get("content", {})):
                 part_name = part.get("name", "")
                 label = f"disk-{disk_name}-{part_name}"
                 if label in to_create:
@@ -231,7 +244,7 @@ class WizardPartitionScreen(BaseScreen):
                         part_path = ssh.path_for_partlabel(label)
                         if part_path:
                             ssh.mkfs(part_path, fstype, label)
-                    except RuntimeError as exc:
+                    except Exception as exc:
                         self.app.call_from_thread(
                             self.query_one("#status", Static).update,
                             f"Failed to create {label}: {exc}",
@@ -272,7 +285,7 @@ class WizardPartitionScreen(BaseScreen):
         for name, disk in devices_raw.get("disk", {}).items():
             if disk_name and name != disk_name:
                 continue
-            for part in (disk.get("content", {}).get("partitions", []) or []):
+            for part in self._normalise_partitions(disk.get("content", {})):
                 pname = part.get("name", "")
                 label = f"disk-{name}-{pname}"
                 missing.append(label)

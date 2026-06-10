@@ -136,9 +136,16 @@ class WizardManualScreen(BaseScreen):
                 for pn in part_names:
                     content_type = fdisk.get("content", {})
                     fstype = "ext4"
-                    if isinstance(content_type.get("partitions"), list):
-                        for p in content_type["partitions"]:
-                            if p.get("name") == pn:
+                    raw_parts = content_type.get("partitions") or {}
+                    if isinstance(raw_parts, dict):
+                        for k, p in raw_parts.items():
+                            if k == pn:
+                                fc = p.get("content", {}) if isinstance(p, dict) else {}
+                                if isinstance(fc, dict):
+                                    fstype = fc.get("format", "ext4")
+                    elif isinstance(raw_parts, list):
+                        for p in raw_parts:
+                            if isinstance(p, dict) and p.get("name") == pn:
                                 fc = p.get("content", {})
                                 if isinstance(fc, dict):
                                     fstype = fc.get("format", "ext4")

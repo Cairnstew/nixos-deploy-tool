@@ -312,3 +312,95 @@ async def test_partitions_back_button(mock_deploy_service: MockDeployService) ->
         await pilot.pause()
         # ScreenHarness has one screen, pop returns to nothing
         assert pilot.app.screen is not None
+
+
+# ── Dict-keyed partitions (disko gpt style) ─────────────────────────
+
+
+_DICT_FLAKE = json.dumps({
+    "disk": {
+        "main": {
+            "device": "/dev/sda",
+            "content": {
+                "type": "gpt",
+                "partitions": {
+                    "ESP": {
+                        "size": "512M",
+                        "type": "EF00",
+                        "content": {"format": "vfat"},
+                    },
+                    "msr": {
+                        "size": "16M",
+                        "type": "E3C9E316-31B4-4298-89FA-94C9F823F8A5",
+                    },
+                    "windows": {
+                        "size": "80G",
+                        "type": "0700",
+                    },
+                    "nixos": {
+                        "size": "100%",
+                        "content": {"format": "ext4"},
+                    },
+                },
+            },
+        },
+    },
+})
+
+
+@pytest.mark.asyncio
+async def test_partitions_dict_format_create_all(
+    mock_deploy_service: MockDeployService,
+) -> None:
+    """Dict-keyed partitions (gpt style) are created correctly.
+
+    The disko config in the user's external flake uses dict-keyed
+    partitions.  Previously the screen iterated with ``for part in
+    raw[...].get("partitions", [])`` which, when applied to a dict,
+    yields string keys — not partition dicts — so ``.get("name")``
+    raised ``AttributeError`` and the thread hung silently.
+    """
+    state = make_wizard_state(
+        missing_partlabels=[
+            "disk-main-ESP",
+            "disk-main-msr",
+            "disk-main-windows",
+            "disk-main-nixos",
+        ],
+        disko_disk_overrides={"main": "/dev/sda"},
+    )
+    mock_deploy_service._nix._results[
+        'nixosConfigurations."test-host".config.disko.devices'
+    ] = _DICT_FLAKE
+
+    async with ScreenHarness(
+        WizardPartitionScreen(mock_deploy_service, state)
+    ).run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+
+        # Click "Create Selected & Deploy"
+        _click_button(screen, "create-deploy")
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+
+        # Confirm preview
+        _click_button(screen, "confirm-preview")
+        await asyncio.wait_for(screen.creation_done.wait(), timeout=5)
+        await pilot.pause()
+
+        assert isinstance(pilot.app.screen, WizardDeployScreen)
+        # All 4 partitions should have been created
+        assert len(mock_deploy_service.ssh_client.created_partitions) == 4
+        assert mock_deploy_service.ssh_client.created_partitions[0] == (
+            "/dev/sda", "disk-main-ESP",
+        )
+        assert mock_deploy_service.ssh_client.created_partitions[1] == (
+            "/dev/sda", "disk-main-msr",
+        )
+        assert mock_deploy_service.ssh_client.created_partitions[2] == (
+            "/dev/sda", "disk-main-windows",
+        )
+        assert mock_deploy_service.ssh_client.created_partitions[3] == (
+            "/dev/sda", "disk-main-nixos",
+        )
