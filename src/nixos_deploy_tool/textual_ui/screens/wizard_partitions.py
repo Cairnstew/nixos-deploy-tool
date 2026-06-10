@@ -152,7 +152,7 @@ class WizardPartitionScreen(BaseScreen):
         try:
             parts: list[str] = []
             for disk_name, device in self._state.disko_disk_overrides.items():
-                result = ssh.run(f"sgdisk --print {device}")
+                result = ssh.run(f"sudo sgdisk --print {device}")
                 existing: set[int] = set()
                 for line in result.stdout.split("\n"):
                     line = line.strip()

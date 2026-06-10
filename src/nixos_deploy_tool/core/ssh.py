@@ -57,11 +57,11 @@ class SshClient(SubprocessRunner):
 
     def create_partition(self, device: str, label: str) -> None:
         self.run(
-            f"sgdisk -n 0:0:0 -t 0:8300 -c 0:{label} {device}"
+            f"sudo sgdisk -n 0:0:0 -t 0:8300 -c 0:{label} {device}"
         )
 
     def mkfs(self, device_path: str, fstype: str, label: str) -> None:
-        self.run(f"mkfs.{fstype} -L {label} {device_path}")
+        self.run(f"sudo mkfs.{fstype} -L {label} {device_path}")
 
     def path_for_partlabel(self, partlabel: str) -> str | None:
         result = self.run(
