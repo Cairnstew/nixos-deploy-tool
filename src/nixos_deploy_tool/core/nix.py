@@ -42,8 +42,32 @@ class NixRunner(SubprocessRunner):
         return self._run(args, timeout=120)
 
     def eval_flake_json(self, attr: str, flake_root: Path) -> str:
-        args = ["eval", "--json", f"{flake_root}#{attr}"]
+        exp = self._build_strip_expr(attr, flake_root)
+        args = ["eval", "--json", "--impure", "--expr", exp]
         try:
             return self._run(args, timeout=120)
         except SubprocessError as exc:
             raise NixEvalError(str(exc)) from exc
+
+    @staticmethod
+    def _build_strip_expr(attr: str, flake_root: Path) -> str:
+        """Build a Nix expression that evaluates *attr* on *flake_root*,
+        stripping internal (underscore-prefixed) attributes that cannot
+        be serialised to JSON (e.g. disko's ``_packages``, ``_scripts``).
+        """
+        return f'''
+let
+  fl = builtins.getFlake "{flake_root}";
+  stripInternal = v:
+    if builtins.isAttrs v then
+      let
+        names = builtins.attrNames v;
+        kv = map (n: {{ name = n; value = stripInternal v.${{n}}; }}) names;
+        safe = builtins.filter (x: builtins.substring 0 1 x.name != "_") kv;
+      in
+        builtins.listToAttrs safe
+    else if builtins.isList v then map stripInternal v
+    else v;
+in
+  stripInternal (fl.{attr})
+'''
