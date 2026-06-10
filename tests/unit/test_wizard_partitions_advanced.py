@@ -192,6 +192,27 @@ async def test_partitions_load_flake_empty(mock_deploy_service: MockDeployServic
         assert "no partitions" in status._Static__content.lower()
 
 
+# ── Auto-load from flake on mount ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_partitions_auto_load_on_mount(mock_deploy_service: MockDeployService) -> None:
+    """Empty missing_partlabels + disk overrides → auto-loads partitions."""
+    state = make_wizard_state(missing_partlabels=[], disko_disk_overrides={"main": "/dev/sda"})
+    mock_deploy_service._nix._results[
+        'nixosConfigurations."test-host".config.disko.devices'
+    ] = _FLAKE_RESULT
+    async with ScreenHarness(WizardPartitionScreen(mock_deploy_service, state)).run_test() as pilot:
+        await pilot.pause()
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+        screen = pilot.app.screen
+        container = screen.query_one("#part-choices-container", Vertical)
+        assert len(list(container.children)) == 2
+        status = screen.query_one("#status", Static)
+        assert "loaded" in status._Static__content.lower()
+
+
 # ── Auto-create path ──────────────────────────────────────────────
 
 

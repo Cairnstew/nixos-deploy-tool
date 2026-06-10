@@ -57,6 +57,9 @@ class WizardPartitionScreen(BaseScreen):
                     ),
                 )
                 await container.mount(row)
+        elif self._state.disko_disk_overrides:
+            self._load_from_flake()
+            return
         else:
             await container.mount(
                 Static(
