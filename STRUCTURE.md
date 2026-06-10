@@ -56,8 +56,9 @@
 │       ├── services/
 │       │   ├── __init__.py
 │       │   ├── base.py           #   BaseService
+│       │   ├── deploy.py         #   DeployService — deploy, validate, partition preview
 │       │   ├── iso.py            #   ISOService
-│       │   ├── deploy.py         #   DeployService
+│       │   ├── prepare.py        #   PrepareService — SSH key generation
 │       │   ├── tailscale.py      #   TailscaleService
 │       │   └── secrets.py        #   SecretService
 │       ├── core/
@@ -66,19 +67,24 @@
 │       │   ├── nix_tool.py       #   NixTool — declarative Nix CLI base
 │       │   ├── age.py            #   AgeRunner — age CLI wrapper
 │       │   ├── flake.py          #   FlakeIntrospector — nix flake show
+│       │   ├── key_store.py      #   KeyStore — SSH key pair generation
 │       │   ├── nix.py            #   NixRunner — nix build/eval
 │       │   ├── nixos_anywhere.py #   NixosAnywhere — nixos-anywhere wrapper
+│       │   ├── ssh.py            #   SshClient, SshProtocol
 │       │   ├── tailscale_api.py  #   TailscaleAPIClient — REST API client
 │       │   └── iso_builder.py    #   ISOBuilder — ISO generation
 │       ├── cli/
 │       │   ├── __init__.py
-│       │   ├── main.py           #   Typer app + callback
+│       │   ├── main.py           #   Typer app + callback + flake-root resolution
 │       │   ├── context.py        #   AppContext dataclass
+│       │   ├── config_loader.py  #   YAML config file loader
+│       │   ├── logging.py        #   Logging setup
 │       │   └── commands/
 │       │       ├── __init__.py
 │       │       ├── base.py       #   BaseCommand
-│       │       ├── iso.py        #   ISO commands (build, list, rotate-keys, info)
 │       │       ├── deploy.py     #   Deploy commands (run, wizard, with-keys, test)
+│       │       ├── iso.py        #   ISO commands (build, list, rotate-keys, info)
+│       │       ├── prepare.py    #   Prepare command (generate SSH keys)
 │       │       ├── tailscale.py  #   Tailscale commands (auth-key, status)
 │       │       └── secrets.py    #   Secrets commands (list, decrypt, inject, rekey)
 │       ├── textual_ui/           #   TUI package (Textual)
@@ -86,15 +92,24 @@
 │       │   ├── app.py            #   DeployToolApp
 │       │   ├── base.py           #   BaseScreen, ListScreen, DetailScreen
 │       │   ├── actions.py        #   Mixins: LoggingMixin, RefreshMixin, SelectionMixin, NavigationMixin
+│       │   ├── wizard_state.py   #   WizardState dataclass
 │       │   ├── screens/
 │       │   │   ├── __init__.py
-│       │   │   ├── main.py       #   Dashboard
-│       │   │   ├── iso_build.py  #   ISO build screen
-│       │   │   ├── deploy_wizard.py # Deploy wizard screen
-│       │   │   └── secrets.py    #   Secrets list screen
+│       │   │   ├── main.py       #   Dashboard (Build ISO, Deploy Wizard, Secrets, Tailscale)
+│       │   │   ├── wizard_host.py    #   Host selection via DataTable
+│       │   │   ├── wizard_config.py  #   Config + partition validation
+│       │   │   ├── wizard_disks.py   #   Map flake disks to target devices
+│       │   │   ├── wizard_manual.py  #   Manual disk/partition selection
+│       │   │   ├── wizard_partitions.py  #   Partition creation
+│       │   │   ├── wizard_confirm.py #   Deploy confirmation with data-loss warning
+│       │   │   ├── wizard_deploy.py  #   Streaming deploy output
+│       │   │   ├── iso_build.py  #   ISO build screen (stub)
+│       │   │   ├── deploy_wizard.py # Deploy wizard screen (stub)
+│       │   │   └── secrets.py    #   Secrets list screen (stub)
 │       │   └── styles/
 │       │       ├── base.tcss
-│       │       └── main.tcss
+│       │       ├── main.tcss
+│       │       └── wizard.tcss
 │       └── repositories/
 │           ├── __init__.py
 │           ├── _base.py          #   BaseRepository ABC
@@ -102,18 +117,44 @@
 │           └── agenix_catalog.py #   Parse secrets.nix, list .age files
 │
 ├── tests/
+│   ├── __init__.py               #   Makes tests a package
 │   ├── conftest.py               #   Root: CliRunner, shared fixtures
+│   ├── fixtures/
+│   │   ├── __init__.py
+│   │   ├── factories.py          #   make_deploy_config, make_wizard_state
+│   │   ├── mocks.py              #   MockDeployService, MockNixRunner, MockFlakeIntrospector
+│   │   └── mock_ssh.py           #   MockSshClient
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── assertions.py         #   assert_ok helper
+│   │   └── builders.py           #   build_success, build_error
 │   ├── unit/                     #   Fast, no I/O — mocks & fakes only
-│   │   ├── conftest.py
-│   │   ├── test_models.py
-│   │   ├── test_services.py
-│   │   ├── test_commands.py
+│   │   ├── conftest.py           #   ScreenHarness, tui_app_async fixture
 │   │   ├── test_cli.py
+│   │   ├── test_commands.py
+│   │   ├── test_context.py
+│   │   ├── test_deploy.py
+│   │   ├── test_key_store.py
+│   │   ├── test_models.py
+│   │   ├── test_nixos_anywhere.py
+│   │   ├── test_services.py
 │   │   ├── test_tui_base.py
-│   │   └── test_context.py
+│   │   ├── test_tui_screens.py
+│   │   ├── test_tui_wizard.py
+│   │   ├── test_tui_extra_coverage.py
+│   │   ├── test_app_constructor.py
+│   │   ├── test_wizard_state.py
+│   │   ├── test_wizard_host_advanced.py
+│   │   ├── test_wizard_config_advanced.py
+│   │   ├── test_wizard_disks_advanced.py
+│   │   ├── test_wizard_manual_advanced.py
+│   │   ├── test_wizard_partitions_advanced.py
+│   │   ├── test_wizard_confirm.py
+│   │   └── test_wizard_deploy_advanced.py
 │   ├── integration/              #   CLI subprocess invocation
 │   │   ├── conftest.py
-│   │   └── test_cli_invocation.py
+│   │   ├── test_cli_invocation.py
+│   │   └── test_example.py
 │   ├── nix_eval/                 #   Nix eval tests (require nix in PATH)
 │   │   ├── conftest.py
 │   │   └── test_module_eval.py
@@ -165,6 +206,9 @@ ABC
   ├── SubprocessRunner     # _run() [shared impl], _wrap_error() [abstract]
   └── APIClient             # _get/_post/_delete [shared impl], _auth_headers() [abstract]
 
+SshProtocol (Protocol)
+  # run(), partition_exists(), list_disks(), create_partition(), mkfs(), path_for_partlabel()
+
 # ── CLI commands (src/nixos_deploy_tool/cli/commands/) ────────────────────
 
 BaseCommand(ABC)
@@ -180,6 +224,7 @@ BaseCommand(ABC)
       ├── DeployWizardCommand(BaseCommand)
       ├── DeployWithKeysCommand(BaseCommand)
       ├── DeployTestCommand(BaseCommand)
+      ├── PrepareCommand(BaseCommand)
       ├── AuthKeyCreateCommand(BaseCommand)
       ├── AuthKeyListCommand(BaseCommand)
       ├── AuthKeyRevokeCommand(BaseCommand)
@@ -207,17 +252,24 @@ DeployToolApp(App)
 # ── TUI screens (src/nixos_deploy_tool/textual_ui/screens/) ──────────────
 
 BaseScreen
-  ├── MainScreen(BaseScreen)               # Dashboard
+  ├── MainScreen(BaseScreen)               # Dashboard (4 buttons)
   ├── WizardHostScreen(ListScreen)         # Host selection via DataTable
   ├── WizardConfigScreen(BaseScreen)       # Config + partition validation
-  ├── WizardPartitionScreen(BaseScreen)    # Partition creation
-  └── WizardDeployScreen(BaseScreen)       # Streaming deploy output
+  ├── WizardDiskScreen(BaseScreen)         # Map flake disks ↔ target devices
+  ├── WizardManualScreen(BaseScreen)       # Manual disk/partition selection
+  ├── WizardPartitionScreen(BaseScreen)    # Partition creation (preview + confirm)
+  ├── WizardConfirmScreen(BaseScreen)      # Pre-deploy confirmation
+  ├── WizardDeployScreen(BaseScreen)       # Streaming deploy output
+  ├── ISOBuildScreen(BaseScreen)           # Stub
+  ├── DeployWizardScreen(BaseScreen)       # Stub
+  └── SecretsListScreen(BaseScreen)        # Stub
 
 # ── Services (src/nixos_deploy_tool/services/) ────────────────────────────
 
 BaseService(ABC)
   ├── ISOService(BaseService)
-  ├── DeployService(BaseService)           # + list_hosts, get_disko_devices, run_streaming
+  ├── DeployService(BaseService)           # + list_hosts, get_disko_devices, run_streaming, ...
+  ├── PrepareService(BaseService)          # SSH key generation
   ├── TailscaleService(BaseService)
   └── SecretService(BaseService)
 
@@ -241,6 +293,7 @@ Standalone:
 # ── Repositories (src/nixos_deploy_tool/repositories/) ────────────────────
 
 BaseRepository(ABC)
+  ├── FlakeRepo(BaseRepository)
   └── AgenixCatalog(BaseRepository)
 
 # ── Exceptions (src/nixos_deploy_tool/exceptions.py) ──────────────────────
@@ -274,11 +327,11 @@ CLI callback → creates AppContext(config)
          DeployService             └── WizardHostScreen(svc, state)
               │                          │
          Services use                   ├── WizardConfigScreen(svc, state)
-         DI for core deps               ├── WizardPartitionScreen(svc, state)
-              │                          └── WizardDeployScreen(svc, state)
-              ▼
-         Core classes use
-         SubprocessRunner / APIClient
+         DI for core deps               ├── WizardDiskScreen(svc, state, flake_devices)
+              │                          ├── WizardManualScreen(svc, state, flake_devices)
+              ▼                          ├── WizardPartitionScreen(svc, state)
+         Core classes use                ├── WizardConfirmScreen(svc, state)
+         SubprocessRunner / APIClient     └── WizardDeployScreen(svc, state)
 ```
 
 ## Architecture

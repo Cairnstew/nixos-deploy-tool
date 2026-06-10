@@ -78,5 +78,11 @@ nix build .#default
     (or `_get_iso_service`, `_get_tailscale_service`, etc.), never `Service(config)` directly.
     TUI screens receive services via constructor injection from `DeployToolApp`.
 12. **TUI screen pattern**: All screens inherit from `BaseScreen` (or `ListScreen`/`DetailScreen`) and
-    accept `(svc: DeployService, state: WizardState)` in their constructor. Screens call public service
-    methods only — never `svc._private_method` or `svc._private_attr`.
+    accept `(svc: DeployService, state: WizardState)` in their constructor. Screens that need flake
+    device info also accept `flake_devices: dict[str, Any]` (``WizardDiskScreen``, ``WizardManualScreen``).
+    Screens call public service methods only — never `svc._private_method` or `svc._private_attr`.
+13. **SSH interface**: `DeployService.create_ssh()` returns `SshProtocol`, not `SubprocessRunner`.
+    Mock tests with `MockSshClient` which implements `SshProtocol`.
+14. **Flake-root tilde expansion**: Always call `Path(x).expanduser().resolve()` on user-provided
+    paths before passing to Nix's `builtins.getFlake` — it requires absolute paths and Nix doesn't
+    expand tilde. Both `cli/main.py:_resolve_flake_root` and `services/deploy.py:__init__` do this.

@@ -32,12 +32,11 @@ class DeployService(BaseService):
         super().__init__(config)
         if not config.flake_root:
             raise RuntimeError("DeployConfig.flake_root must be set")
-        flake_root = Path(config.flake_root)
-        self._flake_root = flake_root
+        self._flake_root = Path(config.flake_root).expanduser().resolve()
         self._nixos_anywhere = nixos_anywhere or NixosAnywhere(
             binary=config.paths.nixos_anywhere_bin or "nixos-anywhere",
         )
-        self._flake = flake or FlakeIntrospector(flake_root)
+        self._flake = flake or FlakeIntrospector(self._flake_root)
         self._nix = nix_runner or NixRunner()
         self._key_store = key_store or KeyStore()
         self._ssh_factory = ssh_factory or (lambda target, key: SshClient(target, key))
@@ -59,10 +58,18 @@ class DeployService(BaseService):
 
     def get_disko_devices(self, host_name: str) -> dict[str, Any]:
         """Evaluate and return the disko devices config for a host."""
-        raw = self._nix.eval_flake_json(
-            f'nixosConfigurations."{host_name}".config.disko.devices',
-            self._flake_root,
-        )
+        try:
+            raw = self._nix.eval_flake_json(
+                f'nixosConfigurations."{host_name}".config.disko.devices',
+                self._flake_root,
+            )
+        except NixEvalError:
+            self.logger.warning(
+                "disko.devices not found for host '%s' — "
+                "the host may not use disko, or the attribute path may differ",
+                host_name,
+            )
+            raise
         return cast("dict[str, Any]", json.loads(raw))
 
     @staticmethod

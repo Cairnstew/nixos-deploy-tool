@@ -39,6 +39,11 @@ Always use bare `model_dump()` when you need empty lists in the output.
 Each command module exposes a `typer.Typer()` instance named `app`. The main app adds them via
 `app.add_typer(module.app, name="<subcommand>")`. The sub-app name must match the command name.
 
+### `Path("~/...").resolve()` does NOT expand tilde
+`Path.resolve()` only resolves `.` and `..` components — it does not expand `~`.
+Always call `.expanduser()` before `.resolve()` on user-provided paths, or the literal
+tilde reaches Nix's `builtins.getFlake` which requires absolute paths.
+
 ## Nix
 
 ### `nix flake check` and callPackage wrappers
@@ -73,6 +78,23 @@ use the old pinned versions.
 
 ## TUI / disko
 
+### Nix eval errors are swallowed by generic exceptions
+When `get_disko_devices()` fails in the TUI validation thread, the generic
+`except Exception` in `_validation_thread` replaces the actual `NixEvalError`
+message with a vague "Could not evaluate disko devices from flake — check your
+configuration". Always capture and display the original exception: the nix
+stderr usually tells you exactly what's wrong.
+
+### `config.disko.devices` may not exist
+If a host doesn't use disko, the nix eval for `nixosConfigurations."HOST".config.disko.devices`
+will fail with "attribute 'disko' missing". The TUI should handle this gracefully
+by allowing the user to skip disk management.
+
+### `builtins.getFlake` needs absolute paths + `--impure`
+The `stripInternal` Nix expression uses `builtins.getFlake` which requires
+an absolute path and the `--impure` flag. Resolve user-provided paths with
+`.expanduser().resolve()` before substituting into the expression.
+
 ### Dict-keyed partitions iterate as keys, not partition objects
 Disko partition configs are Nix attrsets that deserialise to JSON dictionaries. In Python,
 ``for part in disk["content"]["partitions"]`` iterates over **dict keys** (strings) when the
@@ -80,7 +102,7 @@ config uses the attrset/gpt style, not partition dicts. Calling ``part.get("name
 string raises ``AttributeError`` — which ``except RuntimeError`` does **not** catch — so the
 worker thread dies silently and the screen hangs with ``creation_done`` never set.
 
-The canonical fix is ``_normalise_partitions()`` in ``wizard_partitions.py``. Use it
+The canonical fix is ``normalise_partitions()`` in ``models/config.py``. Use it
 anywhere you traverse ``partitions`` from a disko JSON payload.
 
 Two code paths were affected:

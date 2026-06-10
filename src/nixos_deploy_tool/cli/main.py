@@ -25,9 +25,9 @@ app.add_typer(secrets_app, name="secrets")
 
 def _resolve_flake_root(flake_arg: Path | None, config: str) -> Path | None:
     if flake_arg:
-        return flake_arg.resolve()
+        return flake_arg.expanduser().resolve()
     if config:
-        return Path(config)
+        return Path(config).expanduser()
     cwd = Path.cwd()
     if (cwd / "flake.nix").exists():
         return cwd

@@ -171,7 +171,7 @@ class WizardConfigScreen(BaseScreen):
                 self.app.call_from_thread(self._set_status, "Evaluating disko config...")
                 try:
                     devices = self._svc.get_disko_devices(self._state.host_name)
-                except Exception:
+                except Exception as exc:
                     if self._state.config_source == "manual":
                         self.app.call_from_thread(
                             self._eval_failed_manual,
@@ -179,7 +179,7 @@ class WizardConfigScreen(BaseScreen):
                     else:
                         self.app.call_from_thread(
                             self._validation_error,
-                            "Could not evaluate disko devices from flake — check your configuration",
+                            f"Could not evaluate disko devices from flake: {exc}",
                         )
                     return
 
